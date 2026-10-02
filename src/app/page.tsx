@@ -1,101 +1,201 @@
-import Image from "next/image";
+"use client";
+
+import React, { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { Navbar } from "@/components/Navbar";
+import { Hero } from "@/components/Hero";
+import { CompanyLogos } from "@/components/CompanyLogos";
+import { WhyChooseUs } from "@/components/WhyChooseUs";
+import { HowItWorks } from "@/components/HowItWorks";
+import { AudienceSplit } from "@/components/AudienceSplit";
+import { CtaBanner } from "@/components/CtaBanner";
+import { Footer } from "@/components/Footer";
+import { AuthModal } from "@/components/AuthModal";
+import { BookingModal } from "@/components/BookingModal";
+import { InterviewerModal } from "@/components/InterviewerModal";
+import { supabase } from "@/lib/supabase";
+
+interface CurrentUser {
+  email: string;
+  fullName?: string;
+  role: "candidate" | "interviewer";
+}
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const router = useRouter();
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
+  // Current logged in user state
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+
+  // Modal states
+  const [authModalOpen, setAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authRole, setAuthRole] = useState<"candidate" | "interviewer">("candidate");
+  
+  const [bookingModalOpen, setBookingModalOpen] = useState(false);
+  const [interviewerModalOpen, setInterviewerModalOpen] = useState(false);
+
+  // Check saved session on mount & subscribe to updates
+  const loadUser = () => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("hirest_user");
+      if (saved) {
+        try {
+          setCurrentUser(JSON.parse(saved));
+        } catch {
+          setCurrentUser(null);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadUser();
+    window.addEventListener("hirest_user_updated", loadUser);
+    return () => window.removeEventListener("hirest_user_updated", loadUser);
+  }, []);
+
+  // Open Auth modal directly
+  const handleOpenAuth = (mode: "login" | "signup" = "login", role: "candidate" | "interviewer" = "candidate") => {
+    setAuthMode(mode);
+    setAuthRole(role);
+    setAuthModalOpen(true);
+  };
+
+  // When user clicks "I'm a Candidate" or "Join as a Candidate"
+  const handleCandidateAction = () => {
+    if (!currentUser) {
+      handleOpenAuth("login", "candidate");
+    } else {
+      router.push("/dashboard/candidate");
+    }
+  };
+
+  // When user clicks "I'm an Interviewer" or "Join as an Interviewer"
+  const handleInterviewerAction = () => {
+    if (!currentUser) {
+      handleOpenAuth("login", "interviewer");
+    } else {
+      router.push("/dashboard/interviewer");
+    }
+  };
+
+  // When user clicks "Get Started" in the dark CTA banner
+  const handleGetStarted = () => {
+    if (!currentUser) {
+      handleOpenAuth("login", "candidate");
+    } else {
+      if (currentUser.role === "interviewer") {
+        router.push("/dashboard/interviewer");
+      } else {
+        router.push("/dashboard/candidate");
+      }
+    }
+  };
+
+  // Login success callback
+  const handleAuthSuccess = (user: any) => {
+    const userRole = (user.role || authRole) as "candidate" | "interviewer";
+    const loggedUser: CurrentUser = {
+      email: user.email,
+      fullName: user.fullName || user.email.split("@")[0],
+      role: userRole,
+    };
+    setCurrentUser(loggedUser);
+    setAuthModalOpen(false);
+
+    // Redirect to respective dashboard view
+    if (userRole === "interviewer") {
+      router.push("/dashboard/interviewer");
+    } else {
+      router.push("/dashboard/candidate");
+    }
+  };
+
+  // Logout handler
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      // Ignore
+    }
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("hirest_user");
+      window.dispatchEvent(new Event("hirest_user_updated"));
+    }
+    setCurrentUser(null);
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-white text-slate-900">
+      {/* 1. Header Navigation */}
+      <Navbar
+        onOpenAuth={handleOpenAuth}
+        onBookClick={currentUser?.role === "interviewer" ? handleInterviewerAction : handleCandidateAction}
+        currentUser={currentUser}
+        onLogout={handleLogout}
+      />
+
+      {/* Main Page Sections */}
+      <main className="flex-1">
+        {/* 2. Hero Section */}
+        <Hero
+          onCandidateClick={handleCandidateAction}
+          onInterviewerClick={handleInterviewerAction}
+          isLoggedIn={!!currentUser}
+          userRole={currentUser?.role}
+        />
+
+        {/* 3. Trusted By Company Logos */}
+        <CompanyLogos />
+
+        {/* 4. Why Choose Hirest? */}
+        <WhyChooseUs />
+
+        {/* 5. How It Works */}
+        <HowItWorks />
+
+        {/* 6. Dual Audience Split */}
+        <AudienceSplit
+          onJoinCandidate={handleCandidateAction}
+          onJoinInterviewer={handleInterviewerAction}
+          isLoggedIn={!!currentUser}
+          userRole={currentUser?.role}
+        />
+
+        {/* 7. Dark CTA Banner */}
+        <CtaBanner onGetStarted={handleGetStarted} />
       </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+
+      {/* 8. Footer */}
+      <Footer />
+
+      {/* Interactive Auth Modal */}
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        initialMode={authMode}
+        initialRole={authRole}
+        onSuccess={handleAuthSuccess}
+      />
+
+      {/* Booking Modal */}
+      <BookingModal
+        isOpen={bookingModalOpen}
+        onClose={() => setBookingModalOpen(false)}
+        currentUser={currentUser}
+        onRequireLogin={() => handleOpenAuth("login", "candidate")}
+      />
+
+      {/* Interviewer Modal */}
+      <InterviewerModal
+        isOpen={interviewerModalOpen}
+        onClose={() => setInterviewerModalOpen(false)}
+        currentUser={currentUser}
+        onRequireLogin={() => handleOpenAuth("login", "interviewer")}
+      />
     </div>
   );
 }
