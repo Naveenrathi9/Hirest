@@ -36,8 +36,28 @@ export default function Home() {
   const [interviewerModalOpen, setInterviewerModalOpen] = useState(false);
 
   // Check saved session on mount & subscribe to updates
-  const loadUser = () => {
+  const loadUser = async () => {
     if (typeof window !== "undefined") {
+      // 1. Try server session
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const authData = await res.json();
+          if (authData?.authenticated && authData?.user) {
+            const u = authData.user;
+            const mappedUser: CurrentUser = {
+              email: u.email,
+              fullName: u.fullName || u.email.split("@")[0],
+              role: u.role,
+            };
+            setCurrentUser(mappedUser);
+            localStorage.setItem("hirest_user", JSON.stringify(u));
+            return;
+          }
+        }
+      } catch {}
+
+      // 2. Fallback to localStorage
       const saved = localStorage.getItem("hirest_user");
       if (saved) {
         try {
@@ -117,6 +137,7 @@ export default function Home() {
   // Logout handler
   const handleLogout = async () => {
     try {
+      await fetch("/api/auth/logout", { method: "POST" });
       await supabase.auth.signOut();
     } catch (e) {
       // Ignore

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { parseProfileBio, serializeProfileBio } from "@/lib/auth";
 
 function getClient() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
@@ -21,7 +22,8 @@ export async function GET(req: Request) {
         .maybeSingle();
 
       if (data) {
-        return NextResponse.json({ profile: data });
+        const { bioText } = parseProfileBio(data.bio);
+        return NextResponse.json({ profile: { ...data, bio: bioText } });
       }
     }
 
@@ -30,7 +32,12 @@ export async function GET(req: Request) {
       .select("*")
       .order("created_at", { ascending: false });
 
-    return NextResponse.json({ profiles: allProfiles || [] });
+    const sanitizedProfiles = (allProfiles || []).map((p: any) => ({
+      ...p,
+      bio: parseProfileBio(p.bio).bioText,
+    }));
+
+    return NextResponse.json({ profiles: sanitizedProfiles });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
@@ -48,13 +55,24 @@ export async function POST(req: Request) {
     // 1. Try saving to profiles table
     let savedProfile = null;
     try {
-      const profileId = body.id || (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : undefined);
+      // Check existing profile to preserve credentials
+      const { data: existingProfile } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("email", email)
+        .maybeSingle();
+
+      const existingAuth = existingProfile ? parseProfileBio(existingProfile.bio).auth : null;
+      const newBioText = body.location || body.bio || (existingProfile ? parseProfileBio(existingProfile.bio).bioText : "");
+      const serializedBio = serializeProfileBio(newBioText, existingAuth);
+
+      const profileId = body.id || existingProfile?.id || (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : undefined);
       const profilePayload: Record<string, any> = {
         email,
         full_name: fullName,
         role,
         headline: body.targetRole || body.headline || "Candidate",
-        bio: body.location || body.bio || "",
+        bio: serializedBio,
       };
       if (profileId) profilePayload.id = profileId;
 

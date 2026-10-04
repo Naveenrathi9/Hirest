@@ -254,8 +254,10 @@ export const fetchSessionsFromSupabase = async (): Promise<SessionItem[]> => {
         return {
           id: row.id,
           candidateId: row.candidate_id || undefined,
-          candidateName: row.candidate_name || "Rohit Verma",
-          candidateEmail: row.candidate_email || "rohit.verma@example.com",
+          candidateName:
+            row.candidate_name ||
+            (row.candidate_email ? row.candidate_email.split("@")[0] : "Candidate"),
+          candidateEmail: row.candidate_email || "candidate@hirest.com",
           interviewerName: row.interviewer_name || "Amit Sharma",
           interviewerEmail: row.interviewer_email || "amit.sharma@example.com",
           domain: row.domain || "Technical Mock Interview",

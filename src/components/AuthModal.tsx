@@ -2,8 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { X, Mail, Lock, User, CheckCircle2, AlertCircle, ArrowRight, Sparkles } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+import { X, Mail, Lock, User, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck } from "lucide-react";
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -34,12 +33,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       setMode(initialMode);
       setRole(initialRole);
       setMessage(null);
+      setPassword("");
     }
   }, [isOpen, initialMode, initialRole]);
 
   if (!isOpen) return null;
 
-  // Immediate redirect helper (No mail confirmation needed)
   const completeAuthAndRedirect = (userData: { id?: string; email: string; fullName: string; role: "candidate" | "interviewer" }) => {
     if (typeof window !== "undefined") {
       localStorage.setItem("hirest_user", JSON.stringify(userData));
@@ -61,117 +60,68 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLoading(true);
     setMessage(null);
 
-    const displayName = fullName || email.split("@")[0] || (role === "interviewer" ? "Interviewer" : "Candidate");
+    // Basic client validations
+    if (!email || !email.includes("@")) {
+      setMessage({ type: "error", text: "Please enter a valid email address." });
+      setLoading(false);
+      return;
+    }
+
+    if (!password || password.length < 6) {
+      setMessage({ type: "error", text: "Password must be at least 6 characters long." });
+      setLoading(false);
+      return;
+    }
+
+    if (mode === "signup" && !fullName.trim()) {
+      setMessage({ type: "error", text: "Please enter your full name." });
+      setLoading(false);
+      return;
+    }
 
     try {
-      if (mode === "signup") {
-        let userId: string | undefined = undefined;
-        try {
-          const { data: authData } = await supabase.auth.signUp({
-            email,
-            password,
-            options: { data: { full_name: displayName, role } },
-          });
-          if (authData?.user?.id) userId = authData.user.id;
-        } catch {
-          // fallback
-        }
+      const endpoint = mode === "signup" ? "/api/auth/signup" : "/api/auth/login";
+      const payload =
+        mode === "signup"
+          ? { email: email.trim(), password, fullName: fullName.trim(), role }
+          : { email: email.trim(), password, role };
 
-        // 1. Save candidate/interviewer directly to Supabase via server API
-        try {
-          const res = await fetch("/api/candidates", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              id: userId,
-              email,
-              fullName: displayName,
-              role,
-              targetRole: role === "candidate" ? "Software Engineer Candidate" : "Industry Professional Interviewer",
-              location: "India",
-            }),
-          });
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.profile?.id) userId = data.profile.id;
-          }
-        } catch (apiErr) {
-          console.warn("API candidate save error:", apiErr);
-        }
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
 
+      const data = await res.json();
+
+      if (!res.ok) {
         setMessage({
-          type: "success",
-          text: `Welcome to Hirest, ${displayName}! Account created and saved in Supabase. Redirecting...`,
+          type: "error",
+          text: data.error || (mode === "signup" ? "Failed to create account." : "Failed to sign in."),
         });
-
-        setTimeout(() => {
-          completeAuthAndRedirect({
-            id: userId,
-            email,
-            fullName: displayName,
-            role,
-          });
-        }, 500);
-
-      } else {
-        // Sign in mode: fetch candidate details from Supabase if available
-        let userDisplayName = displayName;
-        let userId: string | undefined = undefined;
-        try {
-          const { data: authData } = await supabase.auth.signInWithPassword({ email, password });
-          if (authData?.user?.id) userId = authData.user.id;
-        } catch {}
-
-        try {
-          const res = await fetch(`/api/candidates?email=${encodeURIComponent(email)}`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data?.profile?.full_name) {
-              userDisplayName = data.profile.full_name;
-              userId = data.profile.id || userId;
-            }
-          }
-        } catch {
-          // fallback
-        }
-
-        setMessage({
-          type: "success",
-          text: `Welcome back, ${userDisplayName}! Redirecting to your ${role} dashboard...`,
-        });
-
-        setTimeout(() => {
-          completeAuthAndRedirect({
-            id: userId,
-            email,
-            fullName: userDisplayName,
-            role,
-          });
-        }, 500);
+        setLoading(false);
+        return;
       }
+
+      // Success
+      const authenticatedUser = data.user;
+      setMessage({
+        type: "success",
+        text: mode === "signup"
+          ? `Welcome to Hirest, ${authenticatedUser.fullName}! Account created. Redirecting...`
+          : `Welcome back, ${authenticatedUser.fullName}! Signing you in...`,
+      });
+
+      setTimeout(() => {
+        completeAuthAndRedirect(authenticatedUser);
+      }, 600);
     } catch (err: any) {
       setMessage({
         type: "error",
-        text: err.message || "An unexpected error occurred. Please try again.",
+        text: err.message || "Network error. Please check your connection and try again.",
       });
-    } finally {
       setLoading(false);
     }
-  };
-
-  const handleQuickDemo = (demoRole: "candidate" | "interviewer") => {
-    const demoUser = {
-      email: demoRole === "candidate" ? "rohit.verma@example.com" : "amit.sharma@example.com",
-      fullName: demoRole === "candidate" ? "Rohit Verma" : "Amit Sharma",
-      role: demoRole,
-    };
-    setMessage({
-      type: "success",
-      text: `Logging in as ${demoUser.fullName}...`,
-    });
-    setTimeout(() => {
-      completeAuthAndRedirect(demoUser);
-    }, 500);
   };
 
   return (
@@ -187,22 +137,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </button>
 
         {/* Modal Header */}
-        <div className="p-8 pb-4">
-          <div className="flex items-baseline mb-2">
-            <span className="text-2xl font-extrabold text-blue-600">Hi</span>
-            <span className="text-2xl font-extrabold text-slate-900">rest</span>
-            <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600 ml-0.5"></span>
+        <div className="p-8 pb-3">
+          <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-baseline">
+              <span className="text-2xl font-extrabold text-blue-600">Hi</span>
+              <span className="text-2xl font-extrabold text-slate-900">rest</span>
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-blue-600 ml-0.5"></span>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+              <ShieldCheck className="w-3 h-3 text-emerald-600" />
+              Secure Auth
+            </span>
           </div>
 
           <h3 className="text-xl font-bold text-slate-900">
             {mode === "signup" ? "Create your Hirest account" : "Sign in to Hirest"}
           </h3>
           <p className="text-xs text-slate-500 mt-1">
-            Instant access to your 1-on-1 online mock interview dashboard.
+            {mode === "signup"
+              ? "Join India's premier online mock interview platform."
+              : "Enter your credentials to access your live dashboard."}
           </p>
 
-          {/* Mode Switch Tabs */}
-          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl mt-5">
+          {/* Mode Switch Tabs (Login / Sign Up) */}
+          <div className="grid grid-cols-2 p-1 bg-slate-100 rounded-xl mt-4">
             <button
               type="button"
               onClick={() => {
@@ -213,7 +171,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 mode === "login" ? "bg-white text-blue-600 shadow-xs" : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              Login
+              Sign In
             </button>
             <button
               type="button"
@@ -225,43 +183,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 mode === "signup" ? "bg-white text-blue-600 shadow-xs" : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              Sign Up
+              Create Account
             </button>
           </div>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="p-8 pt-2 space-y-4">
+        <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-4">
           
-          {/* Role selector */}
+          {/* Role Selector Tabs */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-2">
-              Select Role:
+            <label className="block text-xs font-semibold text-slate-700 mb-1.5">
+              Account Role
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => setRole("candidate")}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer text-left flex items-center justify-between ${
                   role === "candidate"
-                    ? "border-blue-600 bg-blue-50/50 text-blue-900 font-bold"
-                    : "border-slate-200 text-slate-600 hover:border-slate-300"
+                    ? "border-blue-600 bg-blue-50/50 text-blue-700 shadow-xs"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                <div className="text-xs font-bold">Candidate</div>
-                <div className="text-[10px] text-slate-500 font-normal">Candidate Dashboard</div>
+                <span>Candidate</span>
+                {role === "candidate" && <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />}
               </button>
               <button
                 type="button"
                 onClick={() => setRole("interviewer")}
-                className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                className={`py-2 px-3 rounded-xl border text-xs font-bold transition-all cursor-pointer text-left flex items-center justify-between ${
                   role === "interviewer"
-                    ? "border-teal-600 bg-teal-50/50 text-teal-900 font-bold"
-                    : "border-slate-200 text-slate-600 hover:border-slate-300"
+                    ? "border-teal-600 bg-teal-50/50 text-teal-700 shadow-xs"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
                 }`}
               >
-                <div className="text-xs font-bold">Interviewer</div>
-                <div className="text-[10px] text-slate-500 font-normal">Interviewer Dashboard</div>
+                <span>Interviewer</span>
+                {role === "interviewer" && <CheckCircle2 className="w-4 h-4 text-teal-600 shrink-0" />}
               </button>
             </div>
           </div>
@@ -273,14 +231,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
                 Full Name
               </label>
               <div className="relative">
-                <User className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                <User className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
                 <input
                   type="text"
                   required
-                  placeholder="e.g. Rohit Verma"
+                  placeholder="e.g. Rahul Sharma"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"
                 />
               </div>
             </div>
@@ -292,52 +250,57 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               Email Address
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Mail className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
               <input
                 type="email"
                 required
                 placeholder="name@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"
               />
             </div>
           </div>
 
           {/* Password */}
           <div>
-            <label className="block text-xs font-semibold text-slate-700 mb-1">
-              Password
-            </label>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-semibold text-slate-700">
+                Password
+              </label>
+              {mode === "signup" && (
+                <span className="text-[10px] text-slate-500">Min 6 characters</span>
+              )}
+            </div>
             <div className="relative">
-              <Lock className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <Lock className="absolute left-3.5 top-3 w-4 h-4 text-slate-400" />
               <input
                 type="password"
                 required
-                placeholder="••••••••"
                 minLength={6}
+                placeholder="••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium"
               />
             </div>
           </div>
 
-          {/* Message feedback */}
+          {/* Error / Success Feedback Banner */}
           {message && (
             <div
-              className={`p-3 rounded-xl text-xs flex items-center gap-2 ${
+              className={`p-3 rounded-xl text-xs font-medium flex items-start gap-2.5 animate-fade-in ${
                 message.type === "success"
                   ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
                   : "bg-red-50 text-red-800 border border-red-200"
               }`}
             >
               {message.type === "success" ? (
-                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
               ) : (
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-600" />
+                <AlertCircle className="w-4 h-4 shrink-0 text-red-600 mt-0.5" />
               )}
-              <span>{message.text}</span>
+              <span className="leading-snug">{message.text}</span>
             </div>
           )}
 
@@ -353,7 +316,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               <>
                 <span>
                   {mode === "signup"
-                    ? `Sign Up & Open ${role === "candidate" ? "Candidate" : "Interviewer"} Dashboard`
+                    ? `Create ${role === "candidate" ? "Candidate" : "Interviewer"} Account`
                     : `Sign In to ${role === "candidate" ? "Candidate" : "Interviewer"} Dashboard`}
                 </span>
                 <ArrowRight className="w-4 h-4" />
@@ -361,30 +324,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({
             )}
           </button>
 
-          {/* 1-Click Instant Demo Login */}
-          <div className="pt-2 border-t border-slate-100">
-            <div className="text-[11px] font-semibold text-slate-500 text-center mb-2 flex items-center justify-center gap-1">
-              <Sparkles className="w-3 h-3 text-amber-500" />
-              <span>Or Direct Instant Dashboard Access:</span>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                onClick={() => handleQuickDemo("candidate")}
-                className="py-2 px-2 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors cursor-pointer text-center flex items-center justify-center gap-1"
-              >
-                <span>Candidate View</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleQuickDemo("interviewer")}
-                className="py-2 px-2 text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 rounded-xl transition-colors cursor-pointer text-center flex items-center justify-center gap-1"
-              >
-                <span>Interviewer View</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
-            </div>
+          {/* Security Notice */}
+          <div className="pt-2 text-center">
+            <p className="text-[11px] text-slate-500 flex items-center justify-center gap-1">
+              <Lock className="w-3 h-3 text-slate-400" />
+              <span>Passwords are cryptographically salted &amp; hashed.</span>
+            </p>
           </div>
         </form>
 

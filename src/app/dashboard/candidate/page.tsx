@@ -83,10 +83,32 @@ export default function CandidateDashboard() {
   const [interviewReminders, setInterviewReminders] = useState(true);
   const [newOpportunities, setNewOpportunities] = useState(true);
 
-  // Load candidate profile from localStorage and Supabase API
+  // Load candidate profile from server session and localStorage
   const loadUserProfile = async () => {
     if (typeof window === "undefined") return;
     try {
+      // 1. Try server session verification
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const authData = await res.json();
+          if (authData?.authenticated && authData?.user) {
+            const u = authData.user;
+            setCandidateProfile((prev) => ({
+              ...prev,
+              id: u.id || prev.id,
+              fullName: u.fullName || prev.fullName,
+              email: u.email || prev.email,
+              targetRole: u.headline || prev.targetRole,
+              location: u.bio || prev.location,
+            }));
+            localStorage.setItem("hirest_user", JSON.stringify(u));
+            return;
+          }
+        }
+      } catch {}
+
+      // 2. Fallback to localStorage
       const savedUserStr = localStorage.getItem("hirest_user");
       if (savedUserStr) {
         const u = JSON.parse(savedUserStr);
@@ -98,7 +120,6 @@ export default function CandidateDashboard() {
           email: u.email || prev.email,
         }));
 
-        // Fetch saved profile from Supabase API if exists
         if (u.email) {
           fetch(`/api/candidates?email=${encodeURIComponent(u.email)}`)
             .then((res) => (res.ok ? res.json() : null))
@@ -225,7 +246,10 @@ export default function CandidateDashboard() {
     setTimeout(() => setProfileSavedToast(false), 2500);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {}
     if (typeof window !== "undefined") {
       localStorage.removeItem("hirest_user");
       window.dispatchEvent(new Event("hirest_user_updated"));
@@ -233,9 +257,16 @@ export default function CandidateDashboard() {
     router.push("/");
   };
 
-  const currentSession = sessions.find((s) => s.id === selectedSessionId) || sessions[0];
-  const upcomingSessions = sessions.filter((s) => s.status === "upcoming");
-  const completedSessions = sessions.filter((s) => s.status === "completed");
+  // Scope sessions dynamically to this candidate
+  const candidateSessions = sessions.filter((s) => {
+    if (candidateProfile.email && s.candidateEmail?.toLowerCase() === candidateProfile.email.toLowerCase()) return true;
+    if (candidateProfile.id && s.candidateId === candidateProfile.id) return true;
+    return false;
+  });
+
+  const upcomingSessions = candidateSessions.filter((s) => s.status === "upcoming");
+  const completedSessions = candidateSessions.filter((s) => s.status === "completed");
+  const currentSession = upcomingSessions.find((s) => s.id === selectedSessionId) || upcomingSessions[0] || candidateSessions[0] || sessions[0];
 
   const questions = [
     "Tell me about yourself and your technical background.",

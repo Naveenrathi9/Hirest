@@ -82,9 +82,29 @@ export default function InterviewerDashboard() {
     company: "Senior Technical Interviewer",
   });
 
-  const loadUserProfile = () => {
+  const loadUserProfile = async () => {
     if (typeof window === "undefined") return;
     try {
+      // 1. Try server session verification
+      try {
+        const res = await fetch("/api/auth/me");
+        if (res.ok) {
+          const authData = await res.json();
+          if (authData?.authenticated && authData?.user) {
+            const u = authData.user;
+            setInterviewerProfile((prev) => ({
+              ...prev,
+              fullName: u.fullName || prev.fullName,
+              email: u.email || prev.email,
+              company: u.headline || prev.company,
+            }));
+            localStorage.setItem("hirest_user", JSON.stringify(u));
+            return;
+          }
+        }
+      } catch {}
+
+      // 2. Fallback to localStorage
       const savedUserStr = localStorage.getItem("hirest_user");
       if (savedUserStr) {
         const u = JSON.parse(savedUserStr);
@@ -209,7 +229,10 @@ export default function InterviewerDashboard() {
     }, 1500);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {}
     if (typeof window !== "undefined") {
       localStorage.removeItem("hirest_user");
       window.dispatchEvent(new Event("hirest_user_updated"));
