@@ -41,7 +41,6 @@ import {
   SessionItem,
   AvailabilitySlot,
 } from "@/lib/store";
-import { SupabaseSyncBanner } from "@/components/SupabaseSyncBanner";
 
 export default function InterviewerDashboard() {
   const router = useRouter();
@@ -387,8 +386,6 @@ export default function InterviewerDashboard() {
 
         {/* Dynamic Content */}
         <main className="p-6 sm:p-8 space-y-8 flex-1">
-          <SupabaseSyncBanner />
-          
           {/* TAB 1: DASHBOARD OVERVIEW */}
           {activeTab === "dashboard" && (
             <div className="space-y-8 animate-fade-in">
