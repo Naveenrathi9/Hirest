@@ -263,7 +263,9 @@ export default function CandidateDashboard() {
     return false;
   });
 
-  const upcomingSessions = candidateSessions.filter((s) => s.status === "upcoming");
+  const upcomingSessions = candidateSessions.filter(
+    (s) => s.status === "upcoming" || s.status === "confirmed" || s.status === "pending"
+  );
   const completedSessions = candidateSessions.filter((s) => s.status === "completed");
   const currentSession = upcomingSessions.find((s) => s.id === selectedSessionId) || upcomingSessions[0] || candidateSessions[0] || sessions[0];
 
@@ -501,11 +503,22 @@ export default function CandidateDashboard() {
                           className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/20 transition-all gap-3"
                         >
                           <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
+                            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shrink-0">
                               {session.domain.substring(0, 2).toUpperCase()}
                             </div>
                             <div>
-                              <h4 className="text-sm font-bold text-slate-900 leading-tight">{session.domain}</h4>
+                              <div className="flex items-center gap-2">
+                                <h4 className="text-sm font-bold text-slate-900 leading-tight">{session.domain}</h4>
+                                {session.status === "pending" ? (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                    Awaiting Mentor
+                                  </span>
+                                ) : (
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                    Confirmed
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs text-slate-500">Mentor: {session.interviewerName}</p>
                             </div>
                           </div>
@@ -1018,10 +1031,10 @@ export default function CandidateDashboard() {
                 <div className="lg:col-span-8 bg-slate-900 rounded-3xl overflow-hidden relative min-h-[420px] flex items-center justify-center shadow-lg">
                   <div className="text-center text-white">
                     <div className="w-24 h-24 rounded-full bg-teal-600 text-white font-bold text-3xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-                      {currentSession?.interviewerName.substring(0, 2).toUpperCase() || "AS"}
+                      {currentSession?.interviewerName?.substring(0, 2).toUpperCase() || "IN"}
                     </div>
-                    <h4 className="text-base font-bold">{currentSession?.interviewerName || "Amit Sharma"}</h4>
-                    <p className="text-xs text-teal-300">Interviewer • Microsoft SDE Track</p>
+                    <h4 className="text-base font-bold">{currentSession?.interviewerName || "Interviewer"}</h4>
+                    <p className="text-xs text-teal-300">Interviewer • {currentSession?.domain || "Mock Interview Track"}</p>
                   </div>
 
                   {/* Picture in picture: Candidate camera stream */}

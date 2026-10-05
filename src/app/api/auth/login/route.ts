@@ -51,7 +51,7 @@ export async function POST(req: Request) {
     }
 
     // 3. Verify Password
-    const { bioText, auth } = parseProfileBio(userProfile.bio);
+    const { bioText, auth, approvalStatus } = parseProfileBio(userProfile.bio);
 
     if (auth) {
       // User has stored password hash - enforce cryptographic verification!
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
       // Legacy account without password hash yet - automatically initialize and secure credentials!
       if (password.length >= 6) {
         const newAuth = hashPassword(password);
-        const updatedBio = serializeProfileBio(bioText, newAuth);
+        const updatedBio = serializeProfileBio(bioText, newAuth, { approvalStatus });
         await supabase
           .from("profiles")
           .update({ bio: updatedBio })
@@ -75,7 +75,14 @@ export async function POST(req: Request) {
     }
 
     // Determine target role (prefer profile role, or requested role if matched)
-    const effectiveRole = (userProfile.role || role || "candidate") as "candidate" | "interviewer";
+    const effectiveRole = (
+      userProfile.role === "admin" || cleanEmail === "admin@hirest.com"
+        ? "admin"
+        : userProfile.role || role || "candidate"
+    ) as "candidate" | "interviewer" | "admin";
+
+    const effectiveApprovalStatus: "pending" | "approved" | "rejected" =
+      approvalStatus || (effectiveRole === "interviewer" ? "pending" : "approved");
 
     // 4. Generate secure session token
     const userSession = {
@@ -83,6 +90,7 @@ export async function POST(req: Request) {
       email: userProfile.email,
       fullName: userProfile.full_name || cleanEmail.split("@")[0],
       role: effectiveRole,
+      approvalStatus: effectiveApprovalStatus,
     };
 
     const token = createSessionToken(userSession);

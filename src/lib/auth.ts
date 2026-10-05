@@ -16,7 +16,13 @@ export interface AuthSessionUser {
   id: string;
   email: string;
   fullName: string;
-  role: "candidate" | "interviewer";
+  role: "candidate" | "interviewer" | "admin";
+  approvalStatus?: "pending" | "approved" | "rejected";
+  company?: string;
+  experienceYears?: number;
+  domain?: string;
+  contact?: string;
+  gender?: string;
 }
 
 export interface SessionTokenPayload extends AuthSessionUser {
@@ -124,20 +130,36 @@ export function verifySessionToken(token: string): SessionTokenPayload | null {
 }
 
 /**
- * Parse metadata / bio safely to retrieve credentials and user bio text
+ * Parse metadata / bio safely to retrieve credentials, approval status, and user bio text
  */
 export function parseProfileBio(rawBio: string | null | undefined): {
   bioText: string;
   auth: StoredAuthData | null;
+  approvalStatus?: "pending" | "approved" | "rejected";
+  company?: string;
+  experienceYears?: number;
+  skills?: string[];
+  hourlyRate?: number;
+  contact?: string;
+  gender?: string;
+  domain?: string;
 } {
   if (!rawBio) return { bioText: "", auth: null };
 
   try {
     const parsed = JSON.parse(rawBio);
-    if (parsed && typeof parsed === "object" && parsed.auth) {
+    if (parsed && typeof parsed === "object") {
       return {
         bioText: typeof parsed.bioText === "string" ? parsed.bioText : "",
-        auth: parsed.auth,
+        auth: parsed.auth || null,
+        approvalStatus: parsed.approvalStatus,
+        company: parsed.company,
+        experienceYears: parsed.experienceYears,
+        skills: Array.isArray(parsed.skills) ? parsed.skills : undefined,
+        hourlyRate: typeof parsed.hourlyRate === "number" ? parsed.hourlyRate : undefined,
+        contact: parsed.contact,
+        gender: parsed.gender,
+        domain: parsed.domain,
       };
     }
   } catch {
@@ -148,13 +170,34 @@ export function parseProfileBio(rawBio: string | null | undefined): {
 }
 
 /**
- * Serialize metadata / bio including credentials
+ * Serialize metadata / bio including credentials and approval status
  */
-export function serializeProfileBio(bioText: string, auth: StoredAuthData | null): string {
-  if (!auth) return bioText || "";
+export function serializeProfileBio(
+  bioText: string,
+  auth: StoredAuthData | null,
+  extra?: {
+    approvalStatus?: "pending" | "approved" | "rejected";
+    company?: string;
+    experienceYears?: number;
+    skills?: string[];
+    hourlyRate?: number;
+    contact?: string;
+    gender?: string;
+    domain?: string;
+  }
+): string {
+  if (!auth && !extra) return bioText || "";
   return JSON.stringify({
     bioText: bioText || "",
     auth,
+    approvalStatus: extra?.approvalStatus,
+    company: extra?.company,
+    experienceYears: extra?.experienceYears,
+    skills: extra?.skills,
+    hourlyRate: extra?.hourlyRate,
+    contact: extra?.contact,
+    gender: extra?.gender,
+    domain: extra?.domain,
     updatedAt: new Date().toISOString(),
   });
 }

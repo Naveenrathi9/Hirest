@@ -103,7 +103,7 @@ export const Hero: React.FC<HeroProps> = ({
           <div className="lg:col-span-6 xl:col-span-5 relative">
             
             {/* Playful Handwritten Note with Curved Arrow */}
-            <div className="absolute -top-10 sm:-top-12 right-4 sm:right-12 z-20 flex flex-col items-end pointer-events-none">
+            <div className="absolute -top-10 sm:-top-12 right-4 sm:right-12 z-20 flex flex-col items-end pointer-events-none animate-float-slow">
               <span className="font-handwriting text-2xl sm:text-3xl text-slate-700 font-semibold tracking-wide drop-shadow-sm rotate-[-3deg]">
                 Real Interviews,
                 <br />
@@ -111,7 +111,7 @@ export const Hero: React.FC<HeroProps> = ({
               </span>
               {/* Cute sketched arrow SVG pointing down */}
               <svg
-                className="w-12 h-10 text-slate-600 mt-1 mr-4 -scale-x-100 rotate-12"
+                className="w-12 h-10 text-slate-600 mt-1 mr-4 -scale-x-100 rotate-12 transition-transform duration-700 hover:rotate-45"
                 viewBox="0 0 50 40"
                 fill="none"
                 stroke="currentColor"
@@ -124,8 +124,40 @@ export const Hero: React.FC<HeroProps> = ({
               </svg>
             </div>
 
+            {/* Floating Top Rating Badge */}
+            <div className="absolute -top-4 -left-3 sm:-top-5 sm:-left-6 z-30 bg-white/95 backdrop-blur-md rounded-2xl py-2 px-3.5 border border-slate-200/90 shadow-xl flex items-center gap-2.5 animate-float-delayed">
+              <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-500 flex items-center justify-center font-black text-sm shadow-2xs">
+                ★
+              </div>
+              <div>
+                <div className="text-xs font-extrabold text-slate-900 leading-tight">4.9 / 5 Rating</div>
+                <div className="text-[10px] text-slate-500 font-medium">3,200+ Mock Rounds</div>
+              </div>
+            </div>
+
+            {/* Floating Bottom Audio Visualizer Badge */}
+            <div className="absolute -bottom-4 -left-3 sm:-bottom-5 sm:-left-6 z-30 bg-white/95 backdrop-blur-md rounded-2xl p-3 border border-slate-200/90 shadow-xl flex items-center gap-3 animate-float">
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs shadow-2xs">
+                <Video className="w-4 h-4 text-emerald-600" />
+              </div>
+              <div>
+                <div className="text-[11px] font-bold text-slate-900 flex items-center gap-1.5 leading-tight">
+                  <span>Live HD Video Session</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                </div>
+                <div className="flex items-center gap-1 h-3.5 mt-1">
+                  <span className="w-1 bg-emerald-500 rounded-full animate-soundwave-1"></span>
+                  <span className="w-1 bg-emerald-500 rounded-full animate-soundwave-2"></span>
+                  <span className="w-1 bg-emerald-500 rounded-full animate-soundwave-3"></span>
+                  <span className="w-1 bg-emerald-500 rounded-full animate-soundwave-4"></span>
+                  <span className="w-1 bg-emerald-500 rounded-full animate-soundwave-2"></span>
+                  <span className="text-[10px] text-emerald-700 font-bold ml-1">Live Audio</span>
+                </div>
+              </div>
+            </div>
+
             {/* Interactive Mock Interview Session Card */}
-            <div className="relative z-10 bg-white rounded-3xl border border-slate-200/90 shadow-xl overflow-hidden p-6 sm:p-7">
+            <div className="relative z-10 bg-white rounded-3xl border border-slate-200/90 shadow-2xl overflow-hidden p-6 sm:p-7 transition-all duration-500 hover:shadow-3xl hover:border-blue-200">
               {/* Session Top Bar */}
               <div className="flex items-center justify-between pb-4 border-b border-slate-100">
                 <div className="flex items-center gap-2">
@@ -147,14 +179,14 @@ export const Hero: React.FC<HeroProps> = ({
               {/* Participants Showcase */}
               <div className="mt-5 grid grid-cols-2 gap-3 bg-slate-50/80 p-3.5 rounded-2xl border border-slate-100">
                 {/* Interviewer */}
-                <div className="bg-white p-3 rounded-xl border border-slate-200/70 shadow-xs">
+                <div className="bg-white p-3 rounded-xl border border-slate-200/70 shadow-xs hover:scale-[1.02] transition-transform">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
-                      VS
+                    <div className="w-8 h-8 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                      IN
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-slate-900 leading-tight">Vikram S.</h4>
-                      <p className="text-[10px] text-blue-600 font-medium">Interviewer</p>
+                      <h4 className="text-xs font-bold text-slate-900 leading-tight">Interviewer</h4>
+                      <p className="text-[10px] text-blue-600 font-semibold">Senior Mentor</p>
                     </div>
                   </div>
                   <div className="inline-flex items-center gap-1 text-[10px] text-slate-600 font-medium bg-slate-50 px-1.5 py-0.5 rounded">
@@ -164,18 +196,18 @@ export const Hero: React.FC<HeroProps> = ({
                 </div>
 
                 {/* Candidate */}
-                <div className="bg-white p-3 rounded-xl border border-slate-200/70 shadow-xs">
+                <div className="bg-white p-3 rounded-xl border border-slate-200/70 shadow-xs hover:scale-[1.02] transition-transform">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs">
-                      AK
+                    <div className="w-8 h-8 rounded-full bg-amber-500 text-white flex items-center justify-center font-bold text-xs shadow-xs">
+                      CA
                     </div>
                     <div>
-                      <h4 className="text-xs font-bold text-slate-900 leading-tight">Ananya K.</h4>
-                      <p className="text-[10px] text-amber-600 font-medium">Candidate</p>
+                      <h4 className="text-xs font-bold text-slate-900 leading-tight">Candidate</h4>
+                      <p className="text-[10px] text-amber-600 font-semibold">Job Aspirant</p>
                     </div>
                   </div>
                   <div className="inline-flex items-center gap-1 text-[10px] text-slate-600 font-medium bg-slate-50 px-1.5 py-0.5 rounded">
-                    <span>Target: SDE-II</span>
+                    <span>Target: Tier-1 Tech</span>
                   </div>
                 </div>
               </div>
@@ -229,9 +261,9 @@ export const Hero: React.FC<HeroProps> = ({
 
             </div>
 
-            {/* Background decorative blob */}
-            <div className="absolute -bottom-8 -right-8 w-64 h-64 bg-blue-100/60 rounded-full blur-3xl pointer-events-none -z-10"></div>
-            <div className="absolute -top-8 -left-8 w-64 h-64 bg-teal-100/40 rounded-full blur-3xl pointer-events-none -z-10"></div>
+            {/* Background decorative blob with pulse-glow */}
+            <div className="absolute -bottom-8 -right-8 w-72 h-72 bg-blue-200/50 rounded-full blur-3xl pointer-events-none -z-10 animate-pulse-glow"></div>
+            <div className="absolute -top-8 -left-8 w-72 h-72 bg-indigo-200/40 rounded-full blur-3xl pointer-events-none -z-10 animate-pulse-glow" style={{ animationDelay: "2s" }}></div>
 
           </div>
 

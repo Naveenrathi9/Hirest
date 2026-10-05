@@ -11,7 +11,7 @@ interface NavbarProps {
   currentUser: {
     email: string;
     fullName?: string;
-    role?: "candidate" | "interviewer";
+    role?: "candidate" | "interviewer" | "admin";
   } | null;
   onLogout: () => void;
 }
@@ -26,7 +26,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const goToDashboard = () => {
-    if (currentUser?.role === "interviewer") {
+    if (currentUser?.role === "admin") {
+      router.push("/dashboard/admin");
+    } else if (currentUser?.role === "interviewer") {
       router.push("/dashboard/interviewer");
     } else {
       router.push("/dashboard/candidate");
@@ -81,6 +83,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             Pricing
           </a>
+          <Link
+            href="/dashboard/admin"
+            className="hover:text-rose-600 transition-colors text-slate-500 font-medium flex items-center gap-1"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>
+            <span>Admin</span>
+          </Link>
         </nav>
 
         {/* Desktop Actions */}
@@ -203,6 +212,13 @@ export const Navbar: React.FC<NavbarProps> = ({
           >
             For Interviewers
           </a>
+          <Link
+            href="/dashboard/admin"
+            onClick={() => setMobileMenuOpen(false)}
+            className="block py-2 text-base font-semibold text-rose-600 hover:text-rose-700"
+          >
+            Admin Dashboard
+          </Link>
 
           <div className="pt-4 border-t border-slate-100 flex flex-col gap-2.5">
             {currentUser ? (

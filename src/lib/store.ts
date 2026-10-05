@@ -7,12 +7,13 @@ export interface SessionItem {
   candidateId?: string;
   candidateName: string;
   candidateEmail: string;
+  interviewerId?: string;
   interviewerName: string;
   interviewerEmail: string;
   domain: string;
   scheduledDate: string;
   scheduledTime: string;
-  status: "upcoming" | "in-progress" | "completed";
+  status: "pending" | "confirmed" | "upcoming" | "in-progress" | "completed" | "cancelled";
   price: number;
   meetingLink?: string;
   notes?: string;
@@ -28,12 +29,32 @@ export interface SessionItem {
   };
 }
 
+export interface InterviewerItem {
+  id: string;
+  fullName: string;
+  email: string;
+  headline: string;
+  company: string;
+  experienceYears: number;
+  rating: number;
+  reviewsCount: number;
+  hourlyRate: number;
+  domain?: string;
+  domains: string[];
+  contact?: string;
+  gender?: string;
+  avatarUrl?: string;
+  approvalStatus: "pending" | "approved" | "rejected";
+}
+
 export interface AvailabilitySlot {
   id: string;
   day: number;
   time: string;
   enabled: boolean;
 }
+
+export const INITIAL_INTERVIEWERS: InterviewerItem[] = [];
 
 // Generate valid UUID for Supabase compatibility
 export const generateUUID = (): string => {
@@ -47,122 +68,28 @@ export const generateUUID = (): string => {
   });
 };
 
-const INITIAL_SESSIONS: SessionItem[] = [
-  {
-    id: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c01",
-    candidateName: "Rohit Verma",
-    candidateEmail: "rohit.verma@example.com",
-    interviewerName: "Amit Sharma",
-    interviewerEmail: "amit.sharma@example.com",
-    domain: "Frontend Developer (React / Next.js) • TCS Track",
-    scheduledDate: "Today",
-    scheduledTime: "10:00 AM - 10:45 AM",
-    status: "upcoming",
-    price: 499,
-    notes: "Candidate requested special focus on React 18 hooks & SSR performance.",
-  },
-  {
-    id: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c02",
-    candidateName: "Sneha Patel",
-    candidateEmail: "sneha.patel@example.com",
-    interviewerName: "Amit Sharma",
-    interviewerEmail: "amit.sharma@example.com",
-    domain: "Data Analyst & SQL • Accenture Track",
-    scheduledDate: "Today",
-    scheduledTime: "12:00 PM - 12:45 PM",
-    status: "upcoming",
-    price: 499,
-  },
-  {
-    id: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c03",
-    candidateName: "Arjun Mehta",
-    candidateEmail: "arjun.mehta@example.com",
-    interviewerName: "Amit Sharma",
-    interviewerEmail: "amit.sharma@example.com",
-    domain: "SDE-II System Design • Microsoft Track",
-    scheduledDate: "Tomorrow",
-    scheduledTime: "11:00 AM - 11:45 AM",
-    status: "upcoming",
-    price: 499,
-  },
-  {
-    id: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c04",
-    candidateName: "Rohit Verma",
-    candidateEmail: "rohit.verma@example.com",
-    interviewerName: "Priya Singh",
-    interviewerEmail: "priya.singh@example.com",
-    domain: "Frontend Developer • Tech Mahindra Track",
-    scheduledDate: "Sep 10, 2026",
-    scheduledTime: "04:00 PM - 04:45 PM",
-    status: "completed",
-    price: 499,
-    feedback: {
-      technicalScore: 9,
-      communicationScore: 8,
-      problemSolvingScore: 9,
-      strengths: [
-        "Clean component composition",
-        "Good React performance awareness",
-        "Strong semantic HTML",
-      ],
-      improvements: [
-        "Practice edge cases for async cancellation",
-        "Deepen Webpack/bundler internals",
-      ],
-      verdict: "Strong Hire",
-      detailedNotes:
-        "Rohit demonstrated exemplary React state architecture and answered tricky closure questions with ease.",
-      completedAt: "Sep 10, 2026",
-    },
-  },
-  {
-    id: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c05",
-    candidateName: "Rohit Verma",
-    candidateEmail: "rohit.verma@example.com",
-    interviewerName: "Sneha Patel",
-    interviewerEmail: "sneha.patel@example.com",
-    domain: "Data Analyst • Accenture Track",
-    scheduledDate: "Sep 04, 2026",
-    scheduledTime: "02:00 PM - 02:45 PM",
-    status: "completed",
-    price: 499,
-    feedback: {
-      technicalScore: 9,
-      communicationScore: 9,
-      problemSolvingScore: 8,
-      strengths: [
-        "Strong SQL window functions",
-        "Clear and articulate communication",
-      ],
-      improvements: ["Explain trade-offs faster in initial 5 minutes"],
-      verdict: "Strong Hire",
-      detailedNotes:
-        "Exceptional analytical depth. Confident problem decomposition.",
-      completedAt: "Sep 04, 2026",
-    },
-  },
-];
+const INITIAL_SESSIONS: SessionItem[] = [];
 
-const INITIAL_SLOTS: AvailabilitySlot[] = [
-  { id: "slot-1", day: 10, time: "09:00 AM - 10:00 AM", enabled: true },
-  { id: "slot-2", day: 10, time: "10:00 AM - 11:00 AM", enabled: true },
-  { id: "slot-3", day: 10, time: "11:00 AM - 12:00 PM", enabled: false },
-  { id: "slot-4", day: 10, time: "02:00 PM - 03:00 PM", enabled: true },
-  { id: "slot-5", day: 10, time: "04:00 PM - 05:00 PM", enabled: true },
-];
+const INITIAL_SLOTS: AvailabilitySlot[] = [];
 
 // Local storage synchronous reader (instant initial render)
 export const getStoredSessions = (): SessionItem[] => {
-  if (typeof window === "undefined") return INITIAL_SESSIONS;
+  if (typeof window === "undefined") return [];
   try {
     const data = localStorage.getItem("hirest_sessions");
-    if (!data) {
-      localStorage.setItem("hirest_sessions", JSON.stringify(INITIAL_SESSIONS));
-      return INITIAL_SESSIONS;
-    }
-    return JSON.parse(data);
+    if (!data) return [];
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (s: any) =>
+        s.interviewerEmail !== "amit.sharma@example.com" &&
+        s.interviewerEmail !== "priya.singh@example.com" &&
+        s.candidateEmail !== "rohit.verma@example.com" &&
+        s.candidateEmail !== "sneha.patel@example.com" &&
+        s.candidateEmail !== "arjun.mehta@example.com"
+    );
   } catch {
-    return INITIAL_SESSIONS;
+    return [];
   }
 };
 
@@ -174,16 +101,13 @@ export const saveStoredSessions = (sessions: SessionItem[]) => {
 };
 
 export const getStoredSlots = (): AvailabilitySlot[] => {
-  if (typeof window === "undefined") return INITIAL_SLOTS;
+  if (typeof window === "undefined") return [];
   try {
     const data = localStorage.getItem("hirest_slots");
-    if (!data) {
-      localStorage.setItem("hirest_slots", JSON.stringify(INITIAL_SLOTS));
-      return INITIAL_SLOTS;
-    }
+    if (!data) return [];
     return JSON.parse(data);
   } catch {
-    return INITIAL_SLOTS;
+    return [];
   }
 };
 
@@ -258,8 +182,9 @@ export const fetchSessionsFromSupabase = async (): Promise<SessionItem[]> => {
             row.candidate_name ||
             (row.candidate_email ? row.candidate_email.split("@")[0] : "Candidate"),
           candidateEmail: row.candidate_email || "candidate@hirest.com",
-          interviewerName: row.interviewer_name || "Amit Sharma",
-          interviewerEmail: row.interviewer_email || "amit.sharma@example.com",
+          interviewerId: row.interviewer_id || undefined,
+          interviewerName: row.interviewer_name || "Interviewer",
+          interviewerEmail: row.interviewer_email || "interviewer@hirest.com",
           domain: row.domain || "Technical Mock Interview",
           scheduledDate:
             row.scheduled_date ||
@@ -278,7 +203,7 @@ export const fetchSessionsFromSupabase = async (): Promise<SessionItem[]> => {
                   minute: "2-digit",
                 })
               : "10:00 AM - 10:45 AM"),
-          status: row.status === "completed" ? "completed" : "upcoming",
+          status: (row.status as SessionItem["status"]) || "pending",
           price: Number(row.price) || 499,
           meetingLink: row.meeting_link || `https://hirest.live/room/${row.id}`,
           notes: row.notes || undefined,
@@ -342,15 +267,18 @@ export const fetchSlotsFromSupabase = async (): Promise<AvailabilitySlot[]> => {
 };
 
 export const addInterviewSession = (
-  newSession: Omit<SessionItem, "id" | "status">
+  newSession: Omit<SessionItem, "id" | "status"> & { status?: SessionItem["status"] }
 ): SessionItem => {
   const current = getStoredSessions();
   const validId = generateUUID();
 
+  // Booking requests from candidates default to "pending" awaiting interviewer acceptance
+  const sessionStatus = newSession.status || "pending";
+
   const session: SessionItem = {
     ...newSession,
     id: validId,
-    status: "upcoming",
+    status: sessionStatus,
   };
 
   // Optimistic local update
@@ -359,20 +287,25 @@ export const addInterviewSession = (
 
   // Sync to Supabase interview_sessions table
   try {
+    const isValidUUIDStr = (str: any) =>
+      typeof str === "string" &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str);
+
     const payload: Record<string, any> = {
       id: validId,
-      candidate_id: session.candidateId || null,
+      candidate_id: isValidUUIDStr(session.candidateId) ? session.candidateId : null,
+      interviewer_id: isValidUUIDStr(session.interviewerId) ? session.interviewerId : null,
       domain: session.domain,
       scheduled_at: new Date().toISOString(),
       duration_minutes: 60,
       price: session.price,
       notes: session.notes,
       meeting_link: session.meetingLink || `https://hirest.live/room/${validId}`,
-      status: "confirmed",
+      status: sessionStatus,
       candidate_name: session.candidateName,
       candidate_email: session.candidateEmail,
-      interviewer_name: session.interviewerName || "Amit Sharma",
-      interviewer_email: session.interviewerEmail || "amit.sharma@example.com",
+      interviewer_name: session.interviewerName || "Interviewer",
+      interviewer_email: session.interviewerEmail || "interviewer@hirest.com",
       scheduled_date: session.scheduledDate,
       scheduled_time: session.scheduledTime,
     };
@@ -402,6 +335,35 @@ export const addInterviewSession = (
   }
 
   return session;
+};
+
+export const updateSessionStatus = (
+  sessionId: string,
+  newStatus: SessionItem["status"]
+) => {
+  const current = getStoredSessions();
+  const updated = current.map((s) => (s.id === sessionId ? { ...s, status: newStatus } : s));
+  saveStoredSessions(updated);
+
+  try {
+    if (typeof window !== "undefined") {
+      fetch("/api/sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: sessionId, status: newStatus }),
+      }).catch(() => {});
+    }
+
+    supabase
+      .from("interview_sessions")
+      .update({ status: newStatus })
+      .eq("id", sessionId)
+      .then(({ error }) => {
+        if (error) console.warn("Supabase updateSessionStatus note:", error.message);
+      });
+  } catch (e) {
+    console.warn("updateSessionStatus exception:", e);
+  }
 };
 
 export const completeInterviewSession = (
@@ -473,5 +435,82 @@ export const completeInterviewSession = (
     }
   } catch (e) {
     console.warn("Supabase completeInterviewSession catch:", e);
+  }
+};
+
+// Interviewers local cache & API sync
+export const getStoredInterviewers = (): InterviewerItem[] => {
+  if (typeof window === "undefined") return [];
+  try {
+    const data = localStorage.getItem("hirest_interviewers");
+    if (!data) return [];
+    const parsed = JSON.parse(data);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (i: any) =>
+        i.email !== "amit.sharma@example.com" &&
+        i.email !== "priya.singh@example.com" &&
+        i.email !== "vikram.malhotra@example.com" &&
+        i.email !== "ananya.roy@example.com" &&
+        !i.id?.startsWith("mentor-")
+    );
+  } catch {
+    return [];
+  }
+};
+
+export const saveStoredInterviewers = (interviewers: InterviewerItem[]) => {
+  if (typeof window !== "undefined") {
+    localStorage.setItem("hirest_interviewers", JSON.stringify(interviewers));
+    window.dispatchEvent(new Event("hirest_interviewers_updated"));
+  }
+};
+
+export const fetchInterviewers = async (
+  showAll = false,
+  domain?: string
+): Promise<InterviewerItem[]> => {
+  try {
+    const params = new URLSearchParams();
+    if (showAll) params.set("all", "true");
+    if (domain) params.set("domain", domain);
+    const queryString = params.toString() ? `?${params.toString()}` : "";
+    const res = await fetch(`/api/interviewers${queryString}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.interviewers && Array.isArray(data.interviewers)) {
+        if (!domain && !showAll) {
+          saveStoredInterviewers(data.interviewers);
+        }
+        return data.interviewers;
+      }
+    }
+  } catch (e) {
+    console.warn("fetchInterviewers note:", e);
+  }
+  return getStoredInterviewers().filter((i) => (showAll ? true : i.approvalStatus === "approved"));
+};
+
+export const updateInterviewerApprovalStatus = async (
+  id: string,
+  email: string,
+  approvalStatus: "approved" | "rejected" | "pending"
+) => {
+  const current = getStoredInterviewers();
+  const updated = current.map((item) =>
+    item.id === id || item.email.toLowerCase() === email.toLowerCase()
+      ? { ...item, approvalStatus }
+      : item
+  );
+  saveStoredInterviewers(updated);
+
+  try {
+    await fetch("/api/interviewers/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ interviewerId: id, email, approvalStatus }),
+    });
+  } catch (e) {
+    console.warn("updateInterviewerApprovalStatus note:", e);
   }
 };

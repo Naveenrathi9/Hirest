@@ -11,7 +11,18 @@ function getClient() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { email, password, fullName, role = "candidate" } = body;
+    const {
+      email,
+      password,
+      fullName,
+      role = "candidate",
+      company,
+      experienceYears,
+      contact,
+      gender,
+      domain,
+      hourlyRate = 499,
+    } = body;
 
     // 1. Validation
     if (!email || typeof email !== "string" || !email.includes("@")) {
@@ -52,7 +63,24 @@ export async function POST(req: Request) {
         ? crypto.randomUUID()
         : "user-" + Date.now();
 
-    const serializedBio = serializeProfileBio("India", authData);
+    // Interviewers require Admin confirmation before they can accept bookings. Candidates do not.
+    const initialApprovalStatus: "pending" | "approved" =
+      validRole === "interviewer" ? "pending" : "approved";
+
+    const expNum = experienceYears ? Number(experienceYears) : (validRole === "interviewer" ? 4 : 0);
+    const cleanDomain = domain || "Full Stack Software Engineering";
+    const cleanCompany = company?.trim() || "";
+
+    const serializedBio = serializeProfileBio(cleanCompany || "India", authData, {
+      approvalStatus: initialApprovalStatus,
+      company: cleanCompany,
+      experienceYears: expNum,
+      contact: contact?.trim() || "",
+      gender: gender || "Not Specified",
+      domain: cleanDomain,
+      skills: cleanDomain ? [cleanDomain] : ["Full Stack Software Engineering"],
+      hourlyRate: Number(hourlyRate) || 499,
+    });
 
     // 4. Insert into Supabase profiles
     const newProfile = {
@@ -63,9 +91,12 @@ export async function POST(req: Request) {
       headline:
         validRole === "candidate"
           ? "Software Engineering Candidate"
-          : "Verified Industry Professional Interviewer",
+          : `${cleanDomain} Expert ${cleanCompany ? `@ ${cleanCompany}` : ""}`.trim(),
+      company: cleanCompany || null,
+      experience_years: expNum,
+      skills: [cleanDomain],
       bio: serializedBio,
-      hourly_rate: 499,
+      hourly_rate: Number(hourlyRate) || 499,
     };
 
     const { data: inserted, error: insertError } = await supabase
@@ -90,15 +121,21 @@ export async function POST(req: Request) {
       email: savedUser.email,
       fullName: savedUser.full_name,
       role: validRole as "candidate" | "interviewer",
+      approvalStatus: initialApprovalStatus,
     };
 
     const token = createSessionToken(userSession);
 
     // 6. Set secure HTTP cookie
+    const welcomeMsg =
+      validRole === "interviewer"
+        ? `Application submitted! Welcome, ${savedUser.full_name}. Your profile is pending Admin verification.`
+        : `Account created successfully. Welcome, ${savedUser.full_name}!`;
+
     const response = NextResponse.json({
       success: true,
       user: userSession,
-      message: `Account created successfully. Welcome, ${savedUser.full_name}!`,
+      message: welcomeMsg,
     });
 
     response.cookies.set({

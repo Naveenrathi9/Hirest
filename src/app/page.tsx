@@ -18,7 +18,7 @@ import { supabase } from "@/lib/supabase";
 interface CurrentUser {
   email: string;
   fullName?: string;
-  role: "candidate" | "interviewer";
+  role: "candidate" | "interviewer" | "admin";
 }
 
 export default function Home() {

@@ -25,6 +25,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Additional Interviewer Registration fields
+  const [company, setCompany] = useState("");
+  const [experienceYears, setExperienceYears] = useState("4");
+  const [contact, setContact] = useState("");
+  const [gender, setGender] = useState("Male");
+  const [domain, setDomain] = useState("Full Stack Software Engineering");
+
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -83,7 +90,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       const endpoint = mode === "signup" ? "/api/auth/signup" : "/api/auth/login";
       const payload =
         mode === "signup"
-          ? { email: email.trim(), password, fullName: fullName.trim(), role }
+          ? {
+              email: email.trim(),
+              password,
+              fullName: fullName.trim(),
+              role,
+              company: company.trim(),
+              experienceYears,
+              contact: contact.trim(),
+              gender,
+              domain,
+            }
           : { email: email.trim(), password, role };
 
       const res = await fetch(endpoint, {
@@ -125,8 +142,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in overflow-y-auto">
+      <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden max-h-[92vh] flex flex-col my-auto">
         
         {/* Close Button */}
         <button
@@ -189,7 +206,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-4">
+        <form onSubmit={handleSubmit} className="px-8 pb-8 space-y-4 overflow-y-auto flex-1 pr-6">
           
           {/* Role Selector Tabs */}
           <div>
@@ -285,6 +302,107 @@ export const AuthModal: React.FC<AuthModalProps> = ({
               />
             </div>
           </div>
+
+          {/* Detailed Interviewer Registration Fields (Sign Up only) */}
+          {mode === "signup" && role === "interviewer" && (
+            <div className="space-y-3.5 pt-1 border-t border-slate-100">
+              <div className="flex items-center gap-2">
+                <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-teal-100 text-teal-800 uppercase tracking-wider">
+                  Interviewer Profile Details
+                </span>
+                <span className="text-[11px] text-slate-400">• Verified by Admin</span>
+              </div>
+
+              {/* Primary Interview Domain */}
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Primary Domain / Expertise
+                </label>
+                <select
+                  value={domain}
+                  onChange={(e) => setDomain(e.target.value)}
+                  className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:border-teal-600"
+                >
+                  <option value="Full Stack Software Engineering">Full Stack Software Engineering</option>
+                  <option value="Frontend (React / Next.js / Web)">Frontend (React / Next.js / Web)</option>
+                  <option value="Backend (Node / Python / Java)">Backend (Node / Python / Java)</option>
+                  <option value="DSA & Problem Solving">DSA &amp; Problem Solving</option>
+                  <option value="System Design & Scalability">System Design &amp; Scalability</option>
+                  <option value="AI / Machine Learning Engineer">AI / Machine Learning Engineer</option>
+                  <option value="Product Management & Behavioral">Product Management &amp; Behavioral</option>
+                </select>
+              </div>
+
+              {/* Company & Experience */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Current / Past Company
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Google, Microsoft, TCS"
+                    value={company}
+                    onChange={(e) => setCompany(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-teal-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Years of Experience
+                  </label>
+                  <select
+                    value={experienceYears}
+                    onChange={(e) => setExperienceYears(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
+                  >
+                    <option value="2">2+ Years</option>
+                    <option value="4">4+ Years</option>
+                    <option value="6">6+ Years</option>
+                    <option value="8">8+ Years</option>
+                    <option value="10">10+ Years (Lead / Staff)</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Contact / Phone & Gender */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Contact / Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    placeholder="+91 98765 43210"
+                    value={contact}
+                    onChange={(e) => setContact(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:outline-none focus:border-teal-600"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    Gender
+                  </label>
+                  <select
+                    value={gender}
+                    onChange={(e) => setGender(e.target.value)}
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium"
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Non-Binary">Non-Binary</option>
+                    <option value="Prefer not to say">Prefer not to say</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="p-2.5 rounded-xl bg-amber-50/70 border border-amber-200 text-amber-900 text-[11px] leading-relaxed">
+                ℹ️ Note: Interviewer accounts are reviewed and confirmed by the Administrator before being activated in the candidate directory.
+              </div>
+            </div>
+          )}
 
           {/* Error / Success Feedback Banner */}
           {message && (
