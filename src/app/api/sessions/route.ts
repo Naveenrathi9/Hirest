@@ -122,16 +122,23 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
-    const { id, status } = body;
+    const { id, status, scheduled_date, scheduled_time, scheduled_at, notes } = body;
 
-    if (!id || !status) {
-      return NextResponse.json({ error: "Session ID and status required" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "Session ID required" }, { status: 400 });
     }
+
+    const updates: Record<string, any> = {};
+    if (status !== undefined) updates.status = status;
+    if (scheduled_date !== undefined) updates.scheduled_date = scheduled_date;
+    if (scheduled_time !== undefined) updates.scheduled_time = scheduled_time;
+    if (scheduled_at !== undefined) updates.scheduled_at = scheduled_at;
+    if (notes !== undefined) updates.notes = notes;
 
     const supabase = getClient();
     const { data, error } = await supabase
       .from("interview_sessions")
-      .update({ status })
+      .update(updates)
       .eq("id", id)
       .select();
 

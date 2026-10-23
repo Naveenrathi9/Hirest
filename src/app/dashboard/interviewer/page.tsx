@@ -30,6 +30,9 @@ import {
   Settings,
   ShieldCheck,
   Award,
+  Calendar,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import {
   getStoredSessions,
@@ -41,6 +44,8 @@ import {
   updateSessionStatus,
   SessionItem,
   AvailabilitySlot,
+  isInterviewTimePassed,
+  requestSessionReschedule,
 } from "@/lib/store";
 import { LiveInterviewRoom } from "@/components/LiveInterviewRoom";
 
@@ -57,6 +62,15 @@ export default function InterviewerDashboard() {
   const [selectedDate, setSelectedDate] = useState<number>(10);
   const [newSlotTime, setNewSlotTime] = useState("");
   const [showAddSlotModal, setShowAddSlotModal] = useState(false);
+
+  // Reschedule Request Modal state
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [rescheduleTargetSession, setRescheduleTargetSession] = useState<SessionItem | null>(null);
+  const [rescheduleDate, setRescheduleDate] = useState("");
+  const [rescheduleTime, setRescheduleTime] = useState("10:00 AM - 10:45 AM");
+  const [rescheduleReason, setRescheduleReason] = useState("");
+  const [rescheduleLoading, setRescheduleLoading] = useState(false);
+  const [rescheduleToast, setRescheduleToast] = useState<string | null>(null);
 
   // Selected session for interview details & live round
   const [selectedSessionId, setSelectedSessionId] = useState<string>("sess-1");
@@ -221,6 +235,38 @@ export default function InterviewerDashboard() {
 
   const handleDeclineRequest = (sessionId: string) => {
     updateSessionStatus(sessionId, "cancelled");
+  };
+
+  const handleOpenRescheduleModal = (session: SessionItem) => {
+    setRescheduleTargetSession(session);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, "0")}-${String(tomorrow.getDate()).padStart(2, "0")}`;
+    setRescheduleDate(tomorrowStr);
+    setRescheduleTime(session.scheduledTime || "10:00 AM - 10:45 AM");
+    setRescheduleReason("Candidate did not join scheduled slot. Proposing a new time for your interview.");
+    setShowRescheduleModal(true);
+  };
+
+  const handleSendRescheduleRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!rescheduleTargetSession || !rescheduleDate || !rescheduleTime) return;
+
+    setRescheduleLoading(true);
+    try {
+      await requestSessionReschedule(
+        rescheduleTargetSession.id,
+        rescheduleDate,
+        rescheduleTime,
+        rescheduleReason
+      );
+      await fetchSessionsFromSupabase();
+      setShowRescheduleModal(false);
+      setRescheduleToast(`Reschedule request sent to ${rescheduleTargetSession.candidateName}! Awaiting candidate confirmation.`);
+      setTimeout(() => setRescheduleToast(null), 4500);
+    } finally {
+      setRescheduleLoading(false);
+    }
   };
 
   const toggleSlot = (id: string) => {
@@ -473,6 +519,22 @@ export default function InterviewerDashboard() {
             </div>
           ) : null}
 
+          {/* Reschedule Sent Notification Banner */}
+          {rescheduleToast && (
+            <div className="p-4 rounded-2xl bg-emerald-600 text-white flex items-center justify-between text-xs font-semibold shadow-md animate-fade-in">
+              <div className="flex items-center gap-2.5">
+                <CheckCircle2 className="w-5 h-5 text-emerald-200 shrink-0" />
+                <span>{rescheduleToast}</span>
+              </div>
+              <button
+                onClick={() => setRescheduleToast(null)}
+                className="p-1 hover:bg-emerald-700 rounded-lg text-emerald-100 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
           {/* TAB 1: DASHBOARD OVERVIEW */}
           {activeTab === "dashboard" && (
             <div className="space-y-8 animate-fade-in">
@@ -539,37 +601,102 @@ export default function InterviewerDashboard() {
                     {upcomingSessions.length === 0 ? (
                       <p className="text-xs text-slate-400 py-4 text-center">No upcoming interviews scheduled yet.</p>
                     ) : (
-                      upcomingSessions.map((session) => (
-                        <div
-                          key={session.id}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border border-slate-100 hover:border-blue-100 hover:bg-blue-50/20 transition-all gap-3"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center font-bold text-xs">
-                              {session.candidateName.substring(0, 2).toUpperCase()}
+                      upcomingSessions.map((session) => {
+                        const isExpired = isInterviewTimePassed(session);
+                        const isReschedulePending = session.rescheduleRequest?.status === "pending";
+
+                        return (
+                          <div
+                            key={session.id}
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border transition-all gap-3 ${
+                              isExpired
+                                ? "border-rose-100 bg-rose-50/20"
+                                : "border-slate-100 hover:border-blue-100 hover:bg-blue-50/20"
+                            }`}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div
+                                className={`w-10 h-10 rounded-full text-white flex items-center justify-center font-bold text-xs ${
+                                  isExpired ? "bg-slate-400" : "bg-blue-600"
+                                }`}
+                              >
+                                {session.candidateName.substring(0, 2).toUpperCase()}
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <h4 className="text-sm font-bold text-slate-900 leading-tight">{session.candidateName}</h4>
+                                  {isExpired ? (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-700 border border-rose-200">
+                                      Slot Expired
+                                    </span>
+                                  ) : (
+                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                      {session.status}
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-xs text-slate-500">{session.domain}</p>
+                              </div>
                             </div>
-                            <div>
-                              <h4 className="text-sm font-bold text-slate-900 leading-tight">{session.candidateName}</h4>
-                              <p className="text-xs text-slate-500">{session.domain}</p>
+                            <div className="flex flex-wrap items-center gap-3 text-xs">
+                              <span className="text-slate-500 flex items-center gap-1">
+                                <Clock className="w-3.5 h-3.5 text-blue-600" />
+                                {session.scheduledDate}, {session.scheduledTime}
+                              </span>
+
+                              {isExpired ? (
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    disabled
+                                    className="px-3 py-1.5 bg-slate-200 text-slate-400 font-bold rounded-lg shadow-xs cursor-not-allowed text-xs flex items-center gap-1"
+                                    title="Interview slot time has crossed. Live room closed."
+                                  >
+                                    <Clock className="w-3 h-3" />
+                                    Slot Expired
+                                  </button>
+
+                                  {isReschedulePending ? (
+                                    <span
+                                      className="px-3 py-1.5 rounded-lg text-xs font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1.5"
+                                      title={`Proposed: ${session.rescheduleRequest?.proposedDate} at ${session.rescheduleRequest?.proposedTime}`}
+                                    >
+                                      <Clock className="w-3.5 h-3.5 text-amber-600 animate-pulse" />
+                                      Reschedule Pending
+                                    </span>
+                                  ) : (
+                                    <button
+                                      onClick={() => handleOpenRescheduleModal(session)}
+                                      className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-xs transition-colors cursor-pointer text-xs flex items-center gap-1.5"
+                                    >
+                                      <Calendar className="w-3.5 h-3.5" />
+                                      Request Reschedule
+                                    </button>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedSessionId(session.id);
+                                      setActiveTab("live");
+                                    }}
+                                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
+                                  >
+                                    Join Live
+                                  </button>
+                                  <button
+                                    onClick={() => handleOpenRescheduleModal(session)}
+                                    className="px-2.5 py-2 text-slate-500 hover:text-amber-700 hover:bg-amber-50 rounded-lg text-xs font-semibold transition-colors cursor-pointer"
+                                    title="Propose new date/time"
+                                  >
+                                    Reschedule
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-4 text-xs">
-                            <span className="text-slate-500 flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5 text-blue-600" />
-                              {session.scheduledDate}, {session.scheduledTime}
-                            </span>
-                            <button
-                              onClick={() => {
-                                setSelectedSessionId(session.id);
-                                setActiveTab("live");
-                              }}
-                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-xs transition-colors cursor-pointer"
-                            >
-                              Join Live
-                            </button>
-                          </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
                 </div>
@@ -806,47 +933,101 @@ export default function InterviewerDashboard() {
           {/* TAB 3: INTERVIEW DETAILS & QUESTION CHECKLIST */}
           {activeTab === "interviews" && (
             <div className="space-y-6 animate-fade-in">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
-                    Interview Details &amp; Evaluation
-                  </h1>
-                  <p className="text-xs sm:text-sm text-slate-500 mt-1">
-                    Select a candidate to review questions, conduct session, or submit evaluation scorecard.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setActiveTab("live")}
-                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Video className="w-3.5 h-3.5" />
-                  Enter Video Room
-                </button>
-              </div>
+              {(() => {
+                const isCurrentExpired = isInterviewTimePassed(currentSession);
+                const isReschedulePending = currentSession?.rescheduleRequest?.status === "pending";
 
-              {/* Candidate Info Card */}
-              {currentSession && (
-                <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-14 h-14 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-bold text-lg shadow-sm">
-                      {currentSession.candidateName.substring(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <h3 className="text-base font-bold text-slate-900">{currentSession.candidateName}</h3>
-                      <p className="text-xs text-slate-500">{currentSession.domain}</p>
-                      <div className="flex gap-1.5 mt-2">
-                        <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded">Live Video</span>
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded capitalize">{currentSession.status}</span>
+                return (
+                  <>
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div>
+                        <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
+                          Interview Details &amp; Evaluation
+                        </h1>
+                        <p className="text-xs sm:text-sm text-slate-500 mt-1">
+                          Review questions, conduct 1-on-1 session, or propose schedule adjustments.
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2.5">
+                        {isCurrentExpired ? (
+                          <>
+                            <button
+                              disabled
+                              className="px-4 py-2 bg-slate-200 text-slate-400 text-xs font-bold rounded-xl cursor-not-allowed flex items-center gap-1.5"
+                              title="Interview slot time has crossed. Live room closed."
+                            >
+                              <Clock className="w-3.5 h-3.5" />
+                              Slot Expired
+                            </button>
+                            <button
+                              onClick={() => currentSession && handleOpenRescheduleModal(currentSession)}
+                              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                            >
+                              <Calendar className="w-3.5 h-3.5" />
+                              {isReschedulePending ? "Update Reschedule Request" : "Propose New Date & Time"}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              onClick={() => setActiveTab("live")}
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs flex items-center gap-1.5 cursor-pointer"
+                            >
+                              <Video className="w-3.5 h-3.5" />
+                              Enter Video Room
+                            </button>
+                            <button
+                              onClick={() => currentSession && handleOpenRescheduleModal(currentSession)}
+                              className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer flex items-center gap-1.5"
+                            >
+                              <Calendar className="w-3.5 h-3.5" />
+                              Reschedule
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
-                  </div>
 
-                  <div className="text-xs text-slate-500 space-y-1 sm:text-right border-t sm:border-t-0 pt-3 sm:pt-0 w-full sm:w-auto">
-                    <div><strong>Scheduled:</strong> {currentSession.scheduledDate}, {currentSession.scheduledTime}</div>
-                    <div><strong>Payout:</strong> ₹400 for completing this session</div>
-                  </div>
-                </div>
-              )}
+                    {/* Candidate Info Card */}
+                    {currentSession && (
+                      <div className="bg-white rounded-2xl border border-slate-200/80 p-6 shadow-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <div className={`w-14 h-14 rounded-2xl text-white flex items-center justify-center font-bold text-lg shadow-sm ${isCurrentExpired ? "bg-slate-400" : "bg-blue-600"}`}>
+                            {currentSession.candidateName.substring(0, 2).toUpperCase()}
+                          </div>
+                          <div>
+                            <h3 className="text-base font-bold text-slate-900">{currentSession.candidateName}</h3>
+                            <p className="text-xs text-slate-500">{currentSession.domain}</p>
+                            <div className="flex gap-1.5 mt-2">
+                              {isCurrentExpired ? (
+                                <span className="px-2 py-0.5 bg-rose-50 text-rose-700 text-[10px] font-bold rounded">Slot Expired / Closed</span>
+                              ) : (
+                                <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-bold rounded">Live Video</span>
+                              )}
+                              <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[10px] font-bold rounded capitalize">{currentSession.status}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-slate-500 space-y-1 sm:text-right border-t sm:border-t-0 pt-3 sm:pt-0 w-full sm:w-auto">
+                          <div><strong>Scheduled:</strong> {currentSession.scheduledDate}, {currentSession.scheduledTime}</div>
+                          {isCurrentExpired ? (
+                            <div className="text-rose-600 font-bold">Slot Expired (Candidate Did Not Join)</div>
+                          ) : (
+                            <div><strong>Payout:</strong> ₹400 for completing this session</div>
+                          )}
+                          {isReschedulePending && (
+                            <div className="text-amber-600 font-semibold text-[11px]">
+                              Reschedule proposed ({currentSession.rescheduleRequest?.proposedDate} at {currentSession.rescheduleRequest?.proposedTime}) - Awaiting Candidate
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
 
               {/* Live Evaluation & Guided Questions */}
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
@@ -1181,91 +1362,244 @@ export default function InterviewerDashboard() {
 
           {/* TAB 6: LIVE ONLINE VIDEO INTERVIEW ROOM */}
           {activeTab === "live" && (
-            <div className="space-y-4 animate-fade-in">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
-                  <h2 className="text-lg font-bold text-slate-900">
-                    Live 1-on-1 Online Mock Interview
-                  </h2>
-                  <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-md">
-                    ⏱️ {formatTimer(liveSeconds)} remaining
+            isInterviewTimePassed(currentSession) ? (
+              <div className="bg-white rounded-3xl border border-slate-200/80 p-8 sm:p-12 text-center max-w-xl mx-auto space-y-6 my-10 shadow-xs animate-fade-in">
+                <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-100 text-rose-600 flex items-center justify-center mx-auto shadow-xs">
+                  <Clock className="w-8 h-8" />
+                </div>
+                <div className="space-y-2">
+                  <span className="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wide bg-rose-100 text-rose-700">
+                    Interview Slot Expired
                   </span>
-                </div>
-                <button
-                  onClick={() => setActiveTab("interviews")}
-                  className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl cursor-pointer"
-                >
-                  End Session &amp; Evaluate
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-                {/* Main Video View: WebRTC Live P2P Video Call */}
-                <div className="lg:col-span-8">
-                  <LiveInterviewRoom
-                    sessionId={currentSession?.id || selectedSessionId || "mock-session"}
-                    currentUserRole="interviewer"
-                    currentUserName={interviewerProfile.fullName || interviewerProfile.email.split("@")[0] || "Interviewer"}
-                    remoteUserName={currentSession?.candidateName || "Candidate"}
-                    domain={currentSession?.domain}
-                    scheduledDate={currentSession?.scheduledDate}
-                    scheduledTime={currentSession?.scheduledTime}
-                    onEndCall={() => setActiveTab("interviews")}
-                  />
+                  <h2 className="text-xl sm:text-2xl font-extrabold text-slate-900 tracking-tight">
+                    This Live Room is Closed
+                  </h2>
+                  <p className="text-xs sm:text-sm text-slate-600 leading-relaxed max-w-md mx-auto">
+                    The scheduled time for this mock round (<strong>{currentSession?.scheduledDate}, {currentSession?.scheduledTime}</strong>) has crossed and the candidate did not join. You can raise a date and time change request for the candidate to review and confirm.
+                  </p>
                 </div>
 
-                {/* Right Interactive Prompt */}
-                <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200/80 p-6 flex flex-col justify-between shadow-xs">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
-                      Active Question ({activeQuestionIndex + 1}/{questions.length})
-                    </span>
-                    <h3 className="text-base font-extrabold text-slate-900 mt-2 mb-3">
-                      &ldquo;{questions[activeQuestionIndex]}&rdquo;
-                    </h3>
-
-                    <div className="flex gap-2 mt-4">
-                      <button
-                        onClick={() => setActiveQuestionIndex((prev) => (prev > 0 ? prev - 1 : prev))}
-                        className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
-                      >
-                        Previous
-                      </button>
-                      <button
-                        onClick={() => setActiveQuestionIndex((prev) => (prev < questions.length - 1 ? prev + 1 : prev))}
-                        className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer"
-                      >
-                        Next Question
-                      </button>
+                {currentSession?.rescheduleRequest?.status === "pending" ? (
+                  <div className="p-4 bg-amber-50 rounded-2xl border border-amber-200 text-left space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
+                      <Clock className="w-4 h-4 text-amber-600 animate-pulse" />
+                      <span>Reschedule Request Sent</span>
                     </div>
-
-                    <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 mt-5">
-                      <div className="text-[11px] font-semibold text-slate-500 mb-1">Live Audio Detection:</div>
-                      <div className="flex items-center gap-1 h-5">
-                        <span className="w-1 bg-emerald-500 h-2 animate-pulse rounded-full"></span>
-                        <span className="w-1 bg-emerald-500 h-4 animate-pulse rounded-full"></span>
-                        <span className="w-1 bg-emerald-500 h-5 animate-pulse rounded-full"></span>
-                        <span className="w-1 bg-emerald-500 h-3 animate-pulse rounded-full"></span>
-                        <span className="w-1 bg-emerald-500 h-5 animate-pulse rounded-full"></span>
-                        <span className="text-[11px] text-emerald-700 font-bold ml-2">Speaking</span>
-                      </div>
-                    </div>
+                    <p className="text-xs text-amber-800">
+                      Proposed new slot: <strong>{currentSession.rescheduleRequest.proposedDate} at {currentSession.rescheduleRequest.proposedTime}</strong>. Waiting for candidate confirmation.
+                    </p>
                   </div>
-
+                ) : (
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <button
+                      onClick={() => currentSession && handleOpenRescheduleModal(currentSession)}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Calendar className="w-4 h-4" />
+                      Propose New Date &amp; Time
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("interviews")}
+                      className="w-full sm:w-auto px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      Back to Interviews
+                    </button>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-4 animate-fade-in">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <h2 className="text-lg font-bold text-slate-900">
+                      Live 1-on-1 Online Mock Interview
+                    </h2>
+                    <span className="text-xs font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-md">
+                      ⏱️ {formatTimer(liveSeconds)} remaining
+                    </span>
+                  </div>
                   <button
                     onClick={() => setActiveTab("interviews")}
-                    className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer mt-4"
+                    className="px-4 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded-xl cursor-pointer"
                   >
-                    Open Live Evaluation Rubric
+                    End Session &amp; Evaluate
                   </button>
                 </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+                  {/* Main Video View: WebRTC Live P2P Video Call */}
+                  <div className="lg:col-span-8">
+                    <LiveInterviewRoom
+                      sessionId={currentSession?.id || selectedSessionId || "mock-session"}
+                      currentUserRole="interviewer"
+                      currentUserName={interviewerProfile.fullName || interviewerProfile.email.split("@")[0] || "Interviewer"}
+                      remoteUserName={currentSession?.candidateName || "Candidate"}
+                      domain={currentSession?.domain}
+                      scheduledDate={currentSession?.scheduledDate}
+                      scheduledTime={currentSession?.scheduledTime}
+                      onEndCall={() => setActiveTab("interviews")}
+                    />
+                  </div>
+
+                  {/* Right Interactive Prompt */}
+                  <div className="lg:col-span-4 bg-white rounded-3xl border border-slate-200/80 p-6 flex flex-col justify-between shadow-xs">
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2 py-0.5 rounded">
+                        Active Question ({activeQuestionIndex + 1}/{questions.length})
+                      </span>
+                      <h3 className="text-base font-extrabold text-slate-900 mt-2 mb-3">
+                        &ldquo;{questions[activeQuestionIndex]}&rdquo;
+                      </h3>
+
+                      <div className="flex gap-2 mt-4">
+                        <button
+                          onClick={() => setActiveQuestionIndex((prev) => (prev > 0 ? prev - 1 : prev))}
+                          className="flex-1 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold cursor-pointer"
+                        >
+                          Previous
+                        </button>
+                        <button
+                          onClick={() => setActiveQuestionIndex((prev) => (prev < questions.length - 1 ? prev + 1 : prev))}
+                          className="flex-1 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer"
+                        >
+                          Next Question
+                        </button>
+                      </div>
+
+                      <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 mt-5">
+                        <div className="text-[11px] font-semibold text-slate-500 mb-1">Live Audio Detection:</div>
+                        <div className="flex items-center gap-1 h-5">
+                          <span className="w-1 bg-emerald-500 h-2 animate-pulse rounded-full"></span>
+                          <span className="w-1 bg-emerald-500 h-4 animate-pulse rounded-full"></span>
+                          <span className="w-1 bg-emerald-500 h-5 animate-pulse rounded-full"></span>
+                          <span className="w-1 bg-emerald-500 h-3 animate-pulse rounded-full"></span>
+                          <span className="w-1 bg-emerald-500 h-5 animate-pulse rounded-full"></span>
+                          <span className="text-[11px] text-emerald-700 font-bold ml-2">Speaking</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setActiveTab("interviews")}
+                      className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs cursor-pointer mt-4"
+                    >
+                      Open Live Evaluation Rubric
+                    </button>
+                  </div>
+                </div>
               </div>
-            </div>
+            )
           )}
 
         </main>
       </div>
+
+      {/* Reschedule Request Modal */}
+      {showRescheduleModal && rescheduleTargetSession && (
+        <div className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 relative animate-scale-up">
+            <button
+              onClick={() => setShowRescheduleModal(false)}
+              className="absolute top-5 right-5 p-2 text-slate-400 hover:text-slate-600 rounded-full hover:bg-slate-100 transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-center gap-3 mb-5">
+              <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center font-bold shadow-sm">
+                <Calendar className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-extrabold text-slate-900 tracking-tight">
+                  Propose Reschedule
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Candidate: <strong>{rescheduleTargetSession.candidateName}</strong> • {rescheduleTargetSession.domain}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 text-xs text-slate-600 mb-5 space-y-1">
+              <div>
+                <strong>Current Slot:</strong> {rescheduleTargetSession.scheduledDate} at {rescheduleTargetSession.scheduledTime}
+              </div>
+              <div className="text-[11px] text-amber-700 font-medium">
+                ⚠️ Note: This change requires candidate confirmation. The session date/time will only update after the candidate accepts your request.
+              </div>
+            </div>
+
+            <form onSubmit={handleSendRescheduleRequest} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Proposed New Date
+                </label>
+                <input
+                  type="date"
+                  min={new Date().toISOString().split("T")[0]}
+                  value={rescheduleDate}
+                  onChange={(e) => setRescheduleDate(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-600"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Proposed Time Slot
+                </label>
+                <select
+                  value={rescheduleTime}
+                  onChange={(e) => setRescheduleTime(e.target.value)}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold focus:outline-none focus:border-blue-600"
+                >
+                  <option value="09:00 AM - 09:45 AM">09:00 AM - 09:45 AM</option>
+                  <option value="10:00 AM - 10:45 AM">10:00 AM - 10:45 AM</option>
+                  <option value="11:00 AM - 11:45 AM">11:00 AM - 11:45 AM</option>
+                  <option value="02:00 PM - 02:45 PM">02:00 PM - 02:45 PM</option>
+                  <option value="03:00 PM - 03:45 PM">03:00 PM - 03:45 PM</option>
+                  <option value="04:00 PM - 04:45 PM">04:00 PM - 04:45 PM</option>
+                  <option value="05:00 PM - 05:45 PM">05:00 PM - 05:45 PM</option>
+                  <option value="06:00 PM - 06:45 PM">06:00 PM - 06:45 PM</option>
+                  <option value="07:00 PM - 07:45 PM">07:00 PM - 07:45 PM</option>
+                  <option value="08:00 PM - 08:45 PM">08:00 PM - 08:45 PM</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Reason / Message to Candidate
+                </label>
+                <textarea
+                  rows={3}
+                  value={rescheduleReason}
+                  onChange={(e) => setRescheduleReason(e.target.value)}
+                  placeholder="e.g. Missed scheduled slot; offering a new time to complete your mock interview."
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:border-blue-600"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowRescheduleModal(false)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={rescheduleLoading}
+                  className="px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                >
+                  <Calendar className="w-4 h-4" />
+                  <span>{rescheduleLoading ? "Sending Request..." : "Send Reschedule Request"}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

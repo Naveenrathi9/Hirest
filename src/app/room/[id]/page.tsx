@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { LiveInterviewRoom } from "@/components/LiveInterviewRoom";
 import { ArrowLeft, Video, ShieldCheck, UserCheck, Clock, Calendar, CheckCircle2 } from "lucide-react";
-import { getStoredSessions, fetchSessionsFromSupabase, SessionItem } from "@/lib/store";
+import { getStoredSessions, fetchSessionsFromSupabase, SessionItem, isInterviewTimePassed } from "@/lib/store";
 
 export default function DirectMeetingRoomPage() {
   const params = useParams();
@@ -138,19 +138,65 @@ export default function DirectMeetingRoomPage() {
       </header>
 
       {/* Main Container */}
-      <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto flex flex-col">
-        <div className="flex-1 w-full flex items-center justify-center">
-          <LiveInterviewRoom
-            sessionId={sessionId}
-            currentUserRole={userRole}
-            currentUserName={currentUserName}
-            remoteUserName={remoteUserName}
-            domain={session?.domain}
-            scheduledDate={session?.scheduledDate}
-            scheduledTime={session?.scheduledTime}
-            onEndCall={handleReturn}
-          />
-        </div>
+      <main className="flex-1 p-4 sm:p-6 max-w-7xl w-full mx-auto flex flex-col justify-center items-center">
+        {session && isInterviewTimePassed(session) ? (
+          <div className="bg-slate-950/90 border border-slate-800 rounded-3xl p-8 sm:p-12 text-center max-w-lg w-full space-y-6 shadow-2xl animate-fade-in my-auto">
+            <div className="w-16 h-16 rounded-2xl bg-rose-500/10 border border-rose-500/30 text-rose-400 flex items-center justify-center mx-auto shadow-sm">
+              <Clock className="w-8 h-8" />
+            </div>
+            <div className="space-y-2">
+              <span className="px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wide bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                Interview Slot Expired
+              </span>
+              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+                This Live Room is Closed
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
+                The scheduled time for this mock round (<strong>{session.scheduledDate}, {session.scheduledTime}</strong>) has passed. Live rooms cannot be accessed once the slot time has elapsed.
+              </p>
+            </div>
+
+            <div className="p-4 bg-slate-900 rounded-2xl border border-slate-800 text-xs text-slate-300 text-left space-y-2">
+              {userRole === "interviewer" ? (
+                <>
+                  <div className="font-bold text-amber-400">Interviewer Action:</div>
+                  <p className="text-slate-400">
+                    You can propose a new date and time from your Interviewer Dashboard. Once the candidate accepts, the session will be rescheduled and a new room slot will open.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="font-bold text-amber-400">Candidate Action:</div>
+                  <p className="text-slate-400">
+                    Please return to your dashboard. If your interviewer proposes a new date and time, you will see a request banner where you can confirm the new slot.
+                  </p>
+                </>
+              )}
+            </div>
+
+            <div>
+              <button
+                onClick={handleReturn}
+                className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-xs transition-colors cursor-pointer"
+              >
+                Return to Dashboard
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 w-full flex items-center justify-center">
+            <LiveInterviewRoom
+              sessionId={sessionId}
+              currentUserRole={userRole}
+              currentUserName={currentUserName}
+              remoteUserName={remoteUserName}
+              domain={session?.domain}
+              scheduledDate={session?.scheduledDate}
+              scheduledTime={session?.scheduledTime}
+              onEndCall={handleReturn}
+            />
+          </div>
+        )}
       </main>
     </div>
   );

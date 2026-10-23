@@ -2,6 +2,15 @@
 
 import { supabase } from "./supabase";
 
+export interface RescheduleRequest {
+  proposedDate: string; // e.g. "2026-10-25"
+  proposedTime: string; // e.g. "06:00 PM - 06:45 PM"
+  reason?: string;
+  requestedBy: "interviewer" | "candidate";
+  requestedAt: string;
+  status: "pending" | "accepted" | "declined";
+}
+
 export interface SessionItem {
   id: string;
   candidateId?: string;
@@ -17,6 +26,7 @@ export interface SessionItem {
   price: number;
   meetingLink?: string;
   notes?: string;
+  rescheduleRequest?: RescheduleRequest;
   feedback?: {
     technicalScore: number;
     communicationScore: number;
@@ -66,6 +76,119 @@ export const generateUUID = (): string => {
     const v = c === "x" ? r : (r & 0x3) | 0x8;
     return v.toString(16);
   });
+};
+
+const RESCHEDULE_PREFIX = ":::RESCHEDULE_REQ:::";
+const RESCHEDULE_SUFFIX = ":::END_RESCHEDULE_REQ:::";
+
+export const parseSessionNotes = (
+  rawNotes?: string
+): { cleanNotes?: string; rescheduleRequest?: RescheduleRequest } => {
+  if (!rawNotes) return {};
+  const startIndex = rawNotes.indexOf(RESCHEDULE_PREFIX);
+  if (startIndex === -1) {
+    return { cleanNotes: rawNotes };
+  }
+  const endIndex = rawNotes.indexOf(RESCHEDULE_SUFFIX, startIndex);
+  if (endIndex === -1) {
+    return { cleanNotes: rawNotes };
+  }
+
+  const before = rawNotes.substring(0, startIndex);
+  const after = rawNotes.substring(endIndex + RESCHEDULE_SUFFIX.length);
+  const cleanNotes = (before + after).trim() || undefined;
+
+  try {
+    const jsonStr = rawNotes.substring(startIndex + RESCHEDULE_PREFIX.length, endIndex);
+    const rescheduleRequest = JSON.parse(jsonStr) as RescheduleRequest;
+    return { cleanNotes, rescheduleRequest };
+  } catch (e) {
+    return { cleanNotes: rawNotes };
+  }
+};
+
+export const serializeSessionNotes = (
+  cleanNotes?: string,
+  rescheduleRequest?: RescheduleRequest
+): string | undefined => {
+  if (!rescheduleRequest) return cleanNotes || undefined;
+  const token = `${RESCHEDULE_PREFIX}${JSON.stringify(rescheduleRequest)}${RESCHEDULE_SUFFIX}`;
+  if (!cleanNotes || !cleanNotes.trim()) return token;
+  return `${cleanNotes.trim()}\n\n${token}`;
+};
+
+export const parseSessionEndDateTime = (
+  scheduledDate?: string,
+  scheduledTime?: string
+): Date | null => {
+  if (!scheduledDate || scheduledDate === "Upcoming") {
+    return null;
+  }
+
+  let dateStr = scheduledDate;
+  if (dateStr === "Today") {
+    const today = new Date();
+    dateStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  }
+
+  // Parse Date part
+  let year: number, month: number, day: number;
+
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(dateStr.trim())) {
+    const parts = dateStr.trim().split("-").map(Number);
+    year = parts[0];
+    month = parts[1] - 1; // 0-indexed
+    day = parts[2];
+  } else {
+    const parsedDate = new Date(dateStr);
+    if (isNaN(parsedDate.getTime())) return null;
+    year = parsedDate.getFullYear();
+    month = parsedDate.getMonth();
+    day = parsedDate.getDate();
+  }
+
+  // Parse Time part
+  let hours = 23;
+  let minutes = 59;
+
+  if (scheduledTime) {
+    const isRange = scheduledTime.includes("-");
+    const targetTimeStr = isRange
+      ? scheduledTime.split("-").pop()!.trim()
+      : scheduledTime.trim();
+
+    const timeMatch = targetTimeStr.match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);
+    if (timeMatch) {
+      let h = parseInt(timeMatch[1], 10);
+      const m = parseInt(timeMatch[2], 10);
+      const ampm = timeMatch[3]?.toUpperCase();
+
+      if (ampm === "PM" && h < 12) h += 12;
+      if (ampm === "AM" && h === 12) h = 0;
+
+      if (!isRange) {
+        const temp = new Date(year, month, day, h, m);
+        temp.setMinutes(temp.getMinutes() + 45);
+        return temp;
+      }
+
+      hours = h;
+      minutes = m;
+    }
+  }
+
+  const result = new Date(year, month, day, hours, minutes, 0, 0);
+  return isNaN(result.getTime()) ? null : result;
+};
+
+export const isInterviewTimePassed = (session?: SessionItem | null): boolean => {
+  if (!session) return false;
+  if (session.status === "completed") return false;
+
+  const endDateTime = parseSessionEndDateTime(session.scheduledDate, session.scheduledTime);
+  if (!endDateTime) return false;
+
+  return Date.now() > endDateTime.getTime();
 };
 
 const INITIAL_SESSIONS: SessionItem[] = [];
@@ -206,7 +329,8 @@ export const fetchSessionsFromSupabase = async (): Promise<SessionItem[]> => {
           status: (row.status as SessionItem["status"]) || "pending",
           price: Number(row.price) || 499,
           meetingLink: row.meeting_link || `/room/${row.id}`,
-          notes: row.notes || undefined,
+          notes: parseSessionNotes(row.notes).cleanNotes,
+          rescheduleRequest: parseSessionNotes(row.notes).rescheduleRequest,
           feedback: fb
             ? {
                 technicalScore: fb.technical_rating || 9,
@@ -299,7 +423,7 @@ export const addInterviewSession = (
       scheduled_at: new Date().toISOString(),
       duration_minutes: 60,
       price: session.price,
-      notes: session.notes,
+      notes: serializeSessionNotes(session.notes, session.rescheduleRequest) || "",
       meeting_link: session.meetingLink || `/room/${validId}`,
       status: sessionStatus,
       candidate_name: session.candidateName,
@@ -435,6 +559,133 @@ export const completeInterviewSession = (
     }
   } catch (e) {
     console.warn("Supabase completeInterviewSession catch:", e);
+  }
+};
+
+export const requestSessionReschedule = async (
+  sessionId: string,
+  proposedDate: string,
+  proposedTime: string,
+  reason?: string
+) => {
+  const current = getStoredSessions();
+  let updatedSession: SessionItem | null = null;
+
+  const rescheduleRequest: RescheduleRequest = {
+    proposedDate,
+    proposedTime,
+    reason,
+    requestedBy: "interviewer",
+    requestedAt: new Date().toISOString(),
+    status: "pending",
+  };
+
+  const updated = current.map((s) => {
+    if (s.id === sessionId) {
+      const { cleanNotes } = parseSessionNotes(s.notes);
+      updatedSession = {
+        ...s,
+        notes: cleanNotes,
+        rescheduleRequest,
+      };
+      return updatedSession;
+    }
+    return s;
+  });
+
+  saveStoredSessions(updated);
+
+  const cleanNotes = updatedSession ? (updatedSession as SessionItem).notes : undefined;
+  const serializedNotes = serializeSessionNotes(cleanNotes, rescheduleRequest);
+
+  try {
+    if (typeof window !== "undefined") {
+      fetch("/api/sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: sessionId,
+          notes: serializedNotes,
+        }),
+      }).catch(() => {});
+    }
+
+    supabase
+      .from("interview_sessions")
+      .update({ notes: serializedNotes })
+      .eq("id", sessionId)
+      .then(({ error }) => {
+        if (error) console.warn("Supabase reschedule request note:", error.message);
+      });
+  } catch (e) {
+    console.warn("requestSessionReschedule exception:", e);
+  }
+};
+
+export const respondToRescheduleRequest = async (
+  sessionId: string,
+  action: "accept" | "decline"
+) => {
+  const current = getStoredSessions();
+  const session = current.find((s) => s.id === sessionId);
+  if (!session || !session.rescheduleRequest) return;
+
+  const updatedReschedule: RescheduleRequest = {
+    ...session.rescheduleRequest,
+    status: action === "accept" ? "accepted" : "declined",
+  };
+
+  const newDate = action === "accept" ? session.rescheduleRequest.proposedDate : session.scheduledDate;
+  const newTime = action === "accept" ? session.rescheduleRequest.proposedTime : session.scheduledTime;
+  const newStatus = action === "accept" ? "upcoming" : session.status;
+
+  const cleanNotes = parseSessionNotes(session.notes).cleanNotes;
+  const serializedNotes = serializeSessionNotes(cleanNotes, updatedReschedule);
+
+  const updated = current.map((s) => {
+    if (s.id === sessionId) {
+      return {
+        ...s,
+        scheduledDate: newDate,
+        scheduledTime: newTime,
+        status: newStatus as SessionItem["status"],
+        notes: cleanNotes,
+        rescheduleRequest: updatedReschedule,
+      };
+    }
+    return s;
+  });
+
+  saveStoredSessions(updated);
+
+  try {
+    const payload: Record<string, any> = {
+      id: sessionId,
+      notes: serializedNotes,
+    };
+    if (action === "accept") {
+      payload.scheduled_date = newDate;
+      payload.scheduled_time = newTime;
+      payload.status = newStatus;
+    }
+
+    if (typeof window !== "undefined") {
+      fetch("/api/sessions", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    }
+
+    supabase
+      .from("interview_sessions")
+      .update(payload)
+      .eq("id", sessionId)
+      .then(({ error }) => {
+        if (error) console.warn("Supabase respondToReschedule note:", error.message);
+      });
+  } catch (e) {
+    console.warn("respondToRescheduleRequest exception:", e);
   }
 };
 
