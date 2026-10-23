@@ -205,7 +205,7 @@ export const fetchSessionsFromSupabase = async (): Promise<SessionItem[]> => {
               : "10:00 AM - 10:45 AM"),
           status: (row.status as SessionItem["status"]) || "pending",
           price: Number(row.price) || 499,
-          meetingLink: row.meeting_link || `https://hirest.live/room/${row.id}`,
+          meetingLink: row.meeting_link || `/room/${row.id}`,
           notes: row.notes || undefined,
           feedback: fb
             ? {
@@ -300,7 +300,7 @@ export const addInterviewSession = (
       duration_minutes: 60,
       price: session.price,
       notes: session.notes,
-      meeting_link: session.meetingLink || `https://hirest.live/room/${validId}`,
+      meeting_link: session.meetingLink || `/room/${validId}`,
       status: sessionStatus,
       candidate_name: session.candidateName,
       candidate_email: session.candidateEmail,

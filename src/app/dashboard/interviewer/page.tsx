@@ -42,6 +42,7 @@ import {
   SessionItem,
   AvailabilitySlot,
 } from "@/lib/store";
+import { LiveInterviewRoom } from "@/components/LiveInterviewRoom";
 
 export default function InterviewerDashboard() {
   const router = useRouter();
@@ -1200,54 +1201,18 @@ export default function InterviewerDashboard() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-                {/* Main Video View */}
-                <div className="lg:col-span-8 bg-slate-900 rounded-3xl overflow-hidden relative min-h-[420px] flex items-center justify-center shadow-lg">
-                  {/* Candidate Feed */}
-                  <div className="text-center text-white">
-                    <div className="w-24 h-24 rounded-full bg-blue-600 text-white font-bold text-3xl flex items-center justify-center mx-auto mb-3 shadow-lg">
-                      {currentSession?.candidateName?.substring(0, 2).toUpperCase() || "CA"}
-                    </div>
-                    <h4 className="text-base font-bold">{currentSession?.candidateName || "Candidate"}</h4>
-                    <p className="text-xs text-slate-400">{currentSession?.domain || "Mock Interview Track"}</p>
-                  </div>
-
-                  {/* Picture in picture: Interviewer camera stream */}
-                  <div className="absolute top-4 right-4 w-40 h-32 bg-slate-800 rounded-2xl border-2 border-slate-700 shadow-xl overflow-hidden flex items-center justify-center text-white">
-                    {isVideoOn ? (
-                      <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="text-center">
-                        <div className="w-10 h-10 rounded-full bg-teal-600 text-white font-bold text-xs flex items-center justify-center mx-auto mb-1">You</div>
-                        <span className="text-[10px] text-slate-300">Camera Off</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Video Controls */}
-                  <div className="absolute bottom-5 inset-x-0 flex items-center justify-center gap-3">
-                    <button
-                      onClick={() => setIsMicOn(!isMicOn)}
-                      className={`p-3 rounded-full text-white transition-colors cursor-pointer ${
-                        isMicOn ? "bg-slate-700 hover:bg-slate-600" : "bg-red-600 hover:bg-red-700"
-                      }`}
-                    >
-                      {isMicOn ? <Mic className="w-4 h-4" /> : <MicOff className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={() => setIsVideoOn(!isVideoOn)}
-                      className={`p-3 rounded-full text-white transition-colors cursor-pointer ${
-                        isVideoOn ? "bg-slate-700 hover:bg-slate-600" : "bg-red-600 hover:bg-red-700"
-                      }`}
-                    >
-                      {isVideoOn ? <Video className="w-4 h-4" /> : <VideoOff className="w-4 h-4" />}
-                    </button>
-                    <button
-                      onClick={() => setActiveTab("interviews")}
-                      className="p-3 rounded-full bg-red-600 hover:bg-red-700 text-white transition-colors cursor-pointer"
-                    >
-                      <PhoneOff className="w-4 h-4" />
-                    </button>
-                  </div>
+                {/* Main Video View: WebRTC Live P2P Video Call */}
+                <div className="lg:col-span-8">
+                  <LiveInterviewRoom
+                    sessionId={currentSession?.id || selectedSessionId || "mock-session"}
+                    currentUserRole="interviewer"
+                    currentUserName={interviewerProfile.fullName || interviewerProfile.email.split("@")[0] || "Interviewer"}
+                    remoteUserName={currentSession?.candidateName || "Candidate"}
+                    domain={currentSession?.domain}
+                    scheduledDate={currentSession?.scheduledDate}
+                    scheduledTime={currentSession?.scheduledTime}
+                    onEndCall={() => setActiveTab("interviews")}
+                  />
                 </div>
 
                 {/* Right Interactive Prompt */}

@@ -98,7 +98,7 @@ export async function POST(req: Request) {
         duration_minutes: body.duration_minutes || 60,
         price: body.price || 499,
         notes: body.notes || "",
-        meeting_link: body.meeting_link || `https://hirest.live/room/${sessionId}`,
+        meeting_link: body.meeting_link || `/room/${sessionId}`,
         status: initialStatus,
         candidate_name: body.candidate_name || "Candidate",
         candidate_email: body.candidate_email || "candidate@example.com",
